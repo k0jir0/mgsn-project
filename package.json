@@ -9,7 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@icp-sdk/core": "^5.0.0"
+    "@icp-sdk/core": "^5.0.0",
+    "chart.js": "^4.5.1"
   },
   "devDependencies": {
     "@icp-sdk/bindgen": "^0.3.0",
