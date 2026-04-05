@@ -44,6 +44,7 @@ export default defineConfig(({ command }) => ({
       outDir: "./src/bindings",
     }),
   ],
+  base: command === "build" ? "/mgsn-project/" : "/",
   build: {
     assetsDir: "",
   },
