@@ -882,7 +882,9 @@ function render(app, dashboard) {
      </div>`;
   attachEvents(app, dashboard);
   updateSidebarPrices(m);
-  requestAnimationFrame(() => renderAllCharts(dashboard));
+  // setTimeout defers until after browser layout is fully committed,
+  // ensuring Chart.js can read non-zero canvas dimensions.
+  setTimeout(() => renderAllCharts(dashboard), 0);
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
