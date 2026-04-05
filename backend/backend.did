@@ -1,0 +1,24 @@
+type Dashboard = record {
+  title : text;
+  subtitle : text;
+  heroNote : text;
+  dataSource : text;
+  updatedAt : int;
+  bobSupply : float64;
+  mgsnSupply : float64;
+  timeline : vec MetricPoint;
+};
+
+type MetricPoint = record {
+  period : text;
+  bobPrice : float64;
+  mgsnPrice : float64;
+  bobVolume : float64;
+  mgsnVolume : float64;
+  bobLiquidity : float64;
+  mgsnLiquidity : float64;
+};
+
+service : {
+  getDashboard : () -> (Dashboard) query;
+};

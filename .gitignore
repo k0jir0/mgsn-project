@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.icp/cache/
+src/bindings/
+# backend.wasm is committed because mops/moc require Linux (Windows build workaround)
+# Regenerate it with the Docker step in README.md whenever backend/main.mo changes
