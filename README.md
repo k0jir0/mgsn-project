@@ -1,5 +1,9 @@
 # BOB / MGSN Strategy Tracker
 
+## About
+
+MGSN Strategy Tracker is a SaylorTracker-inspired analytics dashboard built on the Internet Computer Protocol (ICP). It tracks BOB and MGSN token performance over time, presenting market snapshots, derived metrics, and strategy insights through a clean, responsive frontend. The backend is powered by a Motoko canister that stores and serves token timeline data, while the frontend is a Vite-based asset canister deployed directly on ICP. The project is designed to evolve from seeded historical data toward live on-chain feeds — either via ICP HTTPS outcalls to external data sources or direct integration with ledger and DEX analytics once the BOB and MGSN token identifiers are finalized.
+
 SaylorTracker-inspired dashboard built for the Internet Computer with:
 
 - a Motoko backend canister for seeded token snapshots
