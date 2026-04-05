@@ -44,7 +44,7 @@ export default defineConfig(({ command }) => ({
       outDir: "./src/bindings",
     }),
   ],
-  base: command === "build" ? "/mgsn-project/" : "/",
+  base: command === "build" && process.env.GITHUB_PAGES ? "/mgsn-project/" : "/",
   build: {
     assetsDir: "",
   },
