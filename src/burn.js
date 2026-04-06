@@ -1,12 +1,34 @@
 import "./styles.css";
 import Chart from "chart.js/auto";
-import { demoDashboard, BURN_LOG, BURN_PROGRAM } from "./demoData";
-import { fetchICPSwapPrices, fetchICPSwapPoolStats } from "./liveData";
+
+// Crosshair plugin — draws a vertical tracking line at the hovered data index
+Chart.register({
+  id: "crosshair",
+  afterDraw(chart) {
+    if (!chart.tooltip._active?.length) return;
+    const ctx = chart.ctx;
+    const x = chart.tooltip._active[0].element.x;
+    const { top, bottom } = chart.chartArea;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(148,163,184,0.35)";
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.restore();
+  },
+});
+
+import { demoDashboard, BURN_PROGRAM, TOKEN_CANISTERS } from "./demoData";
+import { fetchICPSwapPrices } from "./liveData";
+import { fetchBurnProgramData } from "./onChainData.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ICPSWAP_SWAP_URL =
-  "https://app.icpswap.com/swap?input=ryjl3-tyaaa-aaaaa-aaaba-cai&output=mgsn7-iiaaa-aaaag-qjvsa-cai";
+  `https://app.icpswap.com/swap?input=${TOKEN_CANISTERS.ICP}&output=${TOKEN_CANISTERS.MGSN}`;
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -25,11 +47,15 @@ function fmtNum(v) {
 
 // ── Burn math ─────────────────────────────────────────────────────────────────
 
-function computeBurnMetrics(mgsnNow) {
-  const totalBurned   = BURN_LOG.reduce((a, e) => a + (e.mgsnBurned ?? 0), 0);
-  const supply        = BURN_PROGRAM.totalSupply;
-  const pctBurned     = (totalBurned / supply) * 100;
-  const remaining     = supply - totalBurned;
+function computeBurnMetrics(mgsnNow, burnState) {
+  const log = burnState?.log ?? [];
+  const totalBurned = burnState?.totalBurned ?? 0;
+  const supply = burnState?.originalSupply
+    ?? burnState?.currentSupply
+    ?? BURN_PROGRAM.totalSupply
+    ?? demoDashboard.mgsnSupply;
+  const pctBurned = supply > 0 ? (totalBurned / supply) * 100 : 0;
+  const remaining = burnState?.currentSupply ?? Math.max(supply - totalBurned, 0);
   const valueDestroyed = totalBurned * mgsnNow;
 
   // Next milestone not yet reached
@@ -39,7 +65,7 @@ function computeBurnMetrics(mgsnNow) {
 
   // Leaderboard: sort descending by mgsnBurned, group by address
   const addrMap = {};
-  for (const e of BURN_LOG) {
+  for (const e of log) {
     if (!addrMap[e.address]) addrMap[e.address] = { address: e.address, totalBurned: 0, txCount: 0, lastDate: "" };
     addrMap[e.address].totalBurned += e.mgsnBurned ?? 0;
     addrMap[e.address].txCount     += 1;
@@ -47,7 +73,21 @@ function computeBurnMetrics(mgsnNow) {
   }
   const leaderboard = Object.values(addrMap).sort((a, b) => b.totalBurned - a.totalBurned);
 
-  return { totalBurned, supply, pctBurned, remaining, valueDestroyed, nextMilestone, toNextTarget, leaderboard };
+  return {
+    burnAddress: burnState?.burnAddress ?? BURN_PROGRAM.burnAddress,
+    burnAddressBalance: burnState?.burnAddressBalance ?? 0,
+    burnLog: log,
+    totalBurned,
+    supply,
+    pctBurned,
+    remaining,
+    valueDestroyed,
+    nextMilestone,
+    toNextTarget,
+    leaderboard,
+    note: burnState?.note ?? "",
+    status: burnState?.status ?? "unavailable",
+  };
 }
 
 function priceImpactEstimate(burnAmount, supply, mgsnNow) {
@@ -145,10 +185,12 @@ function renderImpactCalc(metrics, mgsnNow) {
 // ── HTML builder ──────────────────────────────────────────────────────────────
 
 function buildHTML(metrics, mgsnNow) {
+  const burnAddressReady = !!metrics.burnAddress;
+  const burnAddressText = burnAddressReady ? metrics.burnAddress : "Unavailable";
   const totalBurnedDisplay = metrics.totalBurned > 0 ? compact(metrics.totalBurned) : "0";
   const pctDisplay         = metrics.pctBurned > 0 ? metrics.pctBurned.toFixed(4) + "%" : "0%";
   const valueDisplay       = metrics.valueDestroyed > 0 ? fmt(metrics.valueDestroyed) : "$0.00";
-  const txCount            = BURN_LOG.length;
+  const txCount            = metrics.burnLog.length;
 
   // Milestone progress bars
   const milestoneBars = BURN_PROGRAM.milestones.map((m) => {
@@ -257,13 +299,13 @@ function buildHTML(metrics, mgsnNow) {
               <span class="br-stat-val">${compact(metrics.remaining)} MGSN</span>
             </div>
             <div class="br-stat">
-              <span class="br-stat-label">Program launch</span>
-              <span class="br-stat-val gold">${BURN_PROGRAM.launchDate}</span>
+              <span class="br-stat-label">Blackhole balance</span>
+              <span class="br-stat-val fire">${compact(metrics.burnAddressBalance)} MGSN</span>
             </div>
           </div>
           <div class="br-coming-soon-banner">
             <span class="br-coming-soon-icon">◎</span>
-            <span>Burn program opens <strong>${BURN_PROGRAM.launchDate}</strong>. The blackhole address will be verified and published on launch.</span>
+            <span>${metrics.note || "Burn history is being read directly from the MGSN ledger."}</span>
           </div>
         </div>
         <div class="br-hero-right">
@@ -273,8 +315,8 @@ function buildHTML(metrics, mgsnNow) {
             <a class="br-cta-btn br-cta-primary" href="${ICPSWAP_SWAP_URL}" target="_blank" rel="noopener noreferrer">Buy MGSN to burn →</a>
             <div class="br-burn-address">
               <span class="br-burn-addr-label">Burn address (blackhole)</span>
-              <code class="br-burn-addr-val" id="br-burn-addr">${BURN_PROGRAM.burnAddress}</code>
-              <button class="br-copy-btn" id="br-copy-addr">Copy</button>
+              <code class="br-burn-addr-val" id="br-burn-addr">${burnAddressText}</code>
+              ${burnAddressReady ? `<button class="br-copy-btn" id="br-copy-addr">Copy</button>` : `<span class="br-copy-btn" style="cursor:default;opacity:0.7">Awaiting verification</span>`}
             </div>
             <p class="br-cta-disclaimer">Burning is irreversible. Tokens sent to the blackhole cannot be recovered. Not financial advice.</p>
           </div>
@@ -293,12 +335,14 @@ function buildHTML(metrics, mgsnNow) {
           <div class="br-how-card">
             <div class="br-how-num">02</div>
             <div class="br-how-head">Send to the blackhole</div>
-            <p class="br-how-body">Transfer MGSN to the ICP blackhole canister address: <code class="br-inline-code">${BURN_PROGRAM.burnAddress}</code>. This canister has no controller, no upgrade path, and no way to send tokens back. The burn is permanent and on-chain verifiable.</p>
+            <p class="br-how-body">${burnAddressReady
+              ? `Transfer MGSN to the ICP blackhole canister address: <code class="br-inline-code">${metrics.burnAddress}</code>. This canister has no controller, no upgrade path, and no way to send tokens back. The burn is permanent and on-chain verifiable.`
+              : `The burn address is temporarily unavailable.`}</p>
           </div>
           <div class="br-how-card">
             <div class="br-how-num">03</div>
-            <div class="br-how-head">Submit your TX ID</div>
-            <p class="br-how-body">After burning, share your transaction ID on the MGSN community channels. Verified burns are added to the public leaderboard. Top burners earn milestone badges and rewards.</p>
+            <div class="br-how-head">Auto-index from the ledger</div>
+            <p class="br-how-body">Burns on this page are indexed directly from the MGSN ledger. Transfers to the blackhole and native ledger burn operations are both included in the leaderboard once the archive scan refreshes.</p>
           </div>
         </div>
       </section>
@@ -339,7 +383,7 @@ function buildHTML(metrics, mgsnNow) {
       <!-- Milestone tracker -->
       <section class="br-section">
         <h2 class="br-section-title">Burn milestones</h2>
-        <p class="br-section-sub">Community milestones unlock recognition rewards for top burners. Each milestone is based on % of total supply destroyed.</p>
+        <p class="br-section-sub">Community milestones unlock recognition rewards for top burners. Each milestone is based on the original on-chain supply before recorded burns.</p>
         <div class="br-milestones-layout">
           <div class="br-milestone-list">
             ${milestoneBars}
@@ -354,7 +398,7 @@ function buildHTML(metrics, mgsnNow) {
       <!-- Burn leaderboard -->
       <section class="br-section">
         <h2 class="br-section-title">Public burn leaderboard</h2>
-        <p class="br-section-sub">All verified burns are listed publicly. Rankings are updated when transaction IDs are submitted to the MGSN community and verified on-chain.</p>
+        <p class="br-section-sub">All detected burns are listed publicly. Rankings are rebuilt directly from the MGSN ledger archive, so manual log updates are no longer required.</p>
         <div class="br-table-wrap">
           <table class="br-table">
             <thead>
@@ -420,12 +464,12 @@ function buildHTML(metrics, mgsnNow) {
         <div class="br-cta-inner">
           <h2 class="br-cta-title">Start burning. Join the leaderboard.</h2>
           <p class="br-cta-body-text">
-            Burning MGSN is the most direct way to increase the value of every remaining token. The Community Burn Program opens on <strong>${BURN_PROGRAM.launchDate}</strong>. Acquire MGSN now to be ready.
+            Burning MGSN is the most direct way to increase the value of every remaining token. Historical burn events are already being indexed directly from the MGSN ledger, so every additional burn updates a live on-chain scarcity record.
           </p>
           <div class="br-cta-burn-address">
             <span class="br-burn-addr-label">Official burn address (ICP blackhole)</span>
-            <code class="br-burn-addr-val" id="br-burn-addr-2">${BURN_PROGRAM.burnAddress}</code>
-            <button class="br-copy-btn" id="br-copy-addr-2">Copy</button>
+            <code class="br-burn-addr-val" id="br-burn-addr-2">${burnAddressText}</code>
+            ${burnAddressReady ? `<button class="br-copy-btn" id="br-copy-addr-2">Copy</button>` : `<span class="br-copy-btn" style="cursor:default;opacity:0.7">Awaiting verification</span>`}
           </div>
           <div class="br-cta-btns">
             <a class="br-cta-btn br-cta-fire" href="${ICPSWAP_SWAP_URL}" target="_blank" rel="noopener noreferrer">Buy MGSN on ICPSwap →</a>
@@ -437,7 +481,7 @@ function buildHTML(metrics, mgsnNow) {
       </section>
 
       <div class="page-footer" style="padding:24px 0 60px">
-        <p>Burn program opens ${BURN_PROGRAM.launchDate}. Burn address will be publicly verified on launch.</p>
+        <p>Burn history is read directly from the MGSN ledger. The canonical blackhole address is ${burnAddressText}.</p>
         <p style="margin-top:4px">Powered by <a href="https://icpswap.com" target="_blank" rel="noopener noreferrer">ICPSwap</a> · Deployed on Internet Computer</p>
       </div>
     </div>`;
@@ -448,7 +492,11 @@ function buildHTML(metrics, mgsnNow) {
 const BURN_CSS = `
 .br-page { padding-top: var(--header-h); max-width: 1200px; margin: 0 auto; padding-left: 24px; padding-right: 24px; padding-bottom: 60px; }
 
-/* Nav active state override for burn */
+/* Nav — burn page uses sk-nav/sk-nav-link class names; define them here */
+.sk-nav { display: flex; align-items: center; gap: 2px; margin-left: 24px; }
+.sk-nav-link { padding: 6px 14px; border-radius: var(--radius-md); font-size: 0.78rem; font-weight: 500; color: var(--muted); text-decoration: none; transition: background 120ms, color 120ms; font-family: "IBM Plex Mono", monospace; letter-spacing: 0.03em; }
+.sk-nav-link:hover { color: var(--ink); background: rgba(255,255,255,0.05); }
+/* Active state override for burn */
 .br-nav-active { color: #ef4444 !important; background: rgba(239,68,68,0.1) !important; }
 
 /* Hero */
@@ -604,10 +652,23 @@ async function bootstrap() {
   const app = document.querySelector("#app");
   app.innerHTML = `<div class="loading-screen"><div class="loading-logo">M</div><span class="loading-text">Loading burn data…</span></div>`;
 
-  const [icpswapResult] = await Promise.allSettled([fetchICPSwapPrices()]);
+  const [icpswapResult, burnResult] = await Promise.allSettled([
+    fetchICPSwapPrices(),
+    fetchBurnProgramData(),
+  ]);
   const mgsnNow = icpswapResult.value?.mgsnUsd ?? demoDashboard.timeline.at(-1).mgsnPrice;
+  const burnState = burnResult.value ?? {
+    status: "unavailable",
+    burnAddress: BURN_PROGRAM.burnAddress,
+    burnAddressBalance: 0,
+    currentSupply: demoDashboard.mgsnSupply,
+    originalSupply: demoDashboard.mgsnSupply,
+    totalBurned: 0,
+    log: [],
+    note: "MGSN burn history is temporarily unavailable.",
+  };
 
-  const metrics = computeBurnMetrics(mgsnNow);
+  const metrics = computeBurnMetrics(mgsnNow, burnState);
 
   app.innerHTML = buildHTML(metrics, mgsnNow);
 

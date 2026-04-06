@@ -1,7 +1,23 @@
-// ICP mainnet token canister IDs (for reference / future live feed wiring)
+// ICP mainnet token canister IDs.
 export const TOKEN_CANISTERS = {
+  ICP:  "ryjl3-tyaaa-aaaaa-aaaba-cai",
   BOB:  "7pail-xaaaa-aaaas-aabmq-cai",
-  MGSN: "mgsn7-iiaaa-aaaag-qjvsa-cai",
+  MGSN: "2rqn6-kiaaa-aaaam-qcuya-cai",
+};
+
+const buildEnv = typeof import.meta !== "undefined" ? import.meta.env ?? {} : {};
+
+function envOrNull(name) {
+  const value = buildEnv?.[name];
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+// Optional program addresses. Leave unset until the public vault/canister is published.
+export const PROGRAM_ADDRESSES = {
+  buybackVaultOwner: envOrNull("VITE_MGSN_BUYBACK_ACCOUNT"),
+  stakingCanisterId: envOrNull("VITE_MGSN_STAKING_CANISTER"),
 };
 
 // ICPSwap info overview snapshot (Apr 6 2026):
@@ -10,18 +26,18 @@ export const TOKEN_CANISTERS = {
 // ICP/USD prices: Binance (Jul 2024–Mar 2025) + CoinGecko (Apr 2025–Apr 2026) — REAL
 // BOB/USD prices: ICPSwap TokenStorage canister (Sep 2024–Aug 2025) — REAL
 // BOB volume/liquidity: ICPSwap TokenStorage daily aggregates — REAL
-// MGSN/USD: current price from ICPSwap NodeIndex getAllTokens() — REAL (no stored history)
+// MGSN/USD: fallback snapshot only. Live history is fetched at runtime from ICPSwap
 export const demoDashboard = {
   title: "MGSN Strategy Tracker",
   subtitle: "Real-time token analytics for BOB & MGSN on the Internet Computer.",
   heroNote:
-    "SaylorTracker-inspired comparative dashboard for BOB and MGSN, built on ICP with a Motoko canister backend.",
+    "Static fallback snapshot used only when live ICPSwap queries are unavailable.",
   dataSource:
-    "ICP prices from Binance/CoinGecko. BOB prices/volume from ICPSwap on-chain storage canister. MGSN price from ICPSwap NodeIndex.",
+    "Fallback snapshot: ICP prices from Binance/CoinGecko. BOB prices/volume from ICPSwap storage. Live pages prefer direct ICPSwap canister queries.",
   updatedAt: BigInt(Date.parse("2026-04-06T09:00:00Z") * 1_000_000),
   // Circulating supply (approximate)
   bobSupply:  210_000_000,
-  mgsnSupply:  77_000_000,
+  mgsnSupply:  997_527_804.6869714,
   // ICPSwap liquidity overview (Apr 6 2026)
   icpswapTvl:    3_220_000,
   icpswapVolume: 637_030_000,
@@ -117,8 +133,8 @@ export const BURN_LOG = [
  */
 export const BURN_PROGRAM = {
   launchDate:    "2026-05-01",
-  totalSupply:   77_000_000,
-  burnAddress:   "aaaaa-aa",   // ICP blackhole — tokens sent here are unrecoverable
+  totalSupply:   null,
+  burnAddress:   "aaaaa-aa",   // Canonical ICP blackhole principal
   milestones: [
     { pct: 1,  label: "1% burned",  badge: "Ignition",    reward: "Verified Burner badge on leaderboard"      },
     { pct: 5,  label: "5% burned",  badge: "Combustion",  reward: "Top-5 Burner feature on site homepage"     },

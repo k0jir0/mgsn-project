@@ -1,18 +1,44 @@
 import "./styles.css";
 import Chart from "chart.js/auto";
+
+// Crosshair plugin — draws a vertical tracking line at the hovered data index
+Chart.register({
+  id: "crosshair",
+  afterDraw(chart) {
+    if (!chart.tooltip._active?.length) return;
+    const ctx = chart.ctx;
+    const x = chart.tooltip._active[0].element.x;
+    const { top, bottom } = chart.chartArea;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(148,163,184,0.35)";
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.restore();
+  },
+});
+
 import { demoDashboard, TOKEN_CANISTERS } from "./demoData";
-import { fetchLiveSpotPrices, fetchICPSwapPrices, fetchICPSwapPoolStats } from "./liveData";
+import {
+  fetchDashboardData,
+  fetchLiveSpotPrices,
+  fetchICPSwapPrices,
+  fetchICPSwapPoolStats,
+} from "./liveData";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const ICPSWAP_SWAP_URL =
-  "https://app.icpswap.com/swap?input=ryjl3-tyaaa-aaaaa-aaaba-cai&output=mgsn7-iiaaa-aaaag-qjvsa-cai";
+  `https://app.icpswap.com/swap?input=${TOKEN_CANISTERS.ICP}&output=${TOKEN_CANISTERS.MGSN}`;
 const ICPSWAP_LP_URL =
-  "https://app.icpswap.com/liquidity/add/ryjl3-tyaaa-aaaaa-aaaba-cai/mgsn7-iiaaa-aaaag-qjvsa-cai";
+  `https://app.icpswap.com/liquidity/add/${TOKEN_CANISTERS.ICP}/${TOKEN_CANISTERS.MGSN}`;
 const ICPSWAP_INFO_MGSN =
-  "https://info.icpswap.com/token/details/mgsn7-iiaaa-aaaag-qjvsa-cai";
+  `https://info.icpswap.com/token/details/${TOKEN_CANISTERS.MGSN}`;
 const ICPSWAP_INFO_BOB =
-  "https://info.icpswap.com/token/details/7pail-xaaaa-aaaas-aabmq-cai";
+  `https://info.icpswap.com/token/details/${TOKEN_CANISTERS.BOB}`;
 
 // ICPSwap fee tier for MGSN/ICP pool (0.3%)
 const POOL_FEE = 0.003;
@@ -392,7 +418,7 @@ function estimateLPYield(mgsnUsd, icpUsd, totalDepositUsd, dashboard, livePoolSt
     : 3_000_000;
 
   // Use live pool stats if available, otherwise estimate from BOB proxy
-  const liveVol = livePoolStats.mgsnVol24h ? livePoolStats.mgsnVol24h * 30 : null;
+  const liveVol = livePoolStats.mgsnVol30d ?? (livePoolStats.mgsnVol24h ? livePoolStats.mgsnVol24h * 30 : null);
   const liveLiq  = livePoolStats.mgsnLiq ?? null;
   const estPoolTvl  = liveLiq ?? 30_000;
   const baseVolume  = liveVol ?? (avgBobMonthlyVol * MGSN_VOL_SHARE);
@@ -437,7 +463,9 @@ function estimateLPYield(mgsnUsd, icpUsd, totalDepositUsd, dashboard, livePoolSt
     il:      { minus75: il(0.25), minus50: il(0.50), neutral: 0, plus100: il(2.0), plus300: il(4.0) },
     userShare: userShare * 100,
     compound12, compound24, compound36,
-    liveDataUsed: !!livePoolStats.mgsnVol24h,
+    liveDataUsed: !!(livePoolStats.mgsnVol30d ?? livePoolStats.mgsnVol24h),
+    volumeEstimated: livePoolStats.mgsnVol30d == null && livePoolStats.mgsnVol24h == null,
+    liquidityEstimated: livePoolStats.mgsnLiq == null,
   };
 }
 
@@ -741,7 +769,7 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio) {
       <div class="s-arb-meta">
         <div class="s-arb-meta-item"><span>ICPSwap live</span><span class="mgsn">${fmt(arb.mgsnLive, 7)}</span></div>
         <div class="s-arb-meta-item"><span>BOB-implied</span><span class="bob">${fmt(arb.mgsnProjected, 7)}</span></div>
-        <div class="s-arb-meta-item"><span>Spread</span><span class="${arb.spreadvProj < 0 ? "pos" : "neg"}">${arb.spreadVsProj.toFixed(1)}%</span></div>
+        <div class="s-arb-meta-item"><span>Spread</span><span class="${arb.spreadVsProj < 0 ? "pos" : "neg"}">${arb.spreadVsProj.toFixed(1)}%</span></div>
       </div>
     </div>` : `<p class="s-section-sub" style="padding:12px 0">${arb.note}</p>`;
 
@@ -1061,9 +1089,10 @@ function renderLPCalc(sig, dashboard, livePoolStats = {}) {
   const msEl  = document.getElementById("compound-milestones");
   if (!resEl || !ilEl) return;
 
-  resEl.innerHTML = `<div class="s-calc-divider"></div>
+    resEl.innerHTML = `<div class="s-calc-divider"></div>
     ${dcaRow("Est. pool share", lp.userShare.toFixed(2) + "%")}
-    ${lp.liveDataUsed ? dcaRow("Data source", "ICPSwap live 24h vol", "pos") : ""}
+    ${lp.liveDataUsed ? dcaRow("Data source", "ICPSwap real volume history", "pos") : ""}
+    ${dcaRow("Liquidity basis", lp.liquidityEstimated ? "Configured TVL estimate" : "Live pool TVL")}
     <div class="s-calc-divider"></div>
     <div class="s-apr-row"><span class="s-apr-label">Conservative APR</span><span class="s-apr-val">${lp.apr.conservative.toFixed(1)}%</span><span class="s-apr-monthly">${fmt(lp.monthly.conservative)}/mo</span></div>
     <div class="s-apr-row"><span class="s-apr-label">Base APR</span><span class="s-apr-val pos">${lp.apr.base.toFixed(1)}%</span><span class="s-apr-monthly">${fmt(lp.monthly.base)}/mo</span></div>
@@ -1308,7 +1337,7 @@ async function bootstrap() {
   const app = document.querySelector("#app");
   app.innerHTML = `<div class="loading-screen"><div class="loading-logo">M</div><span class="loading-text">Computing strategy signals…</span></div>`;
 
-  const dashboard = demoDashboard;
+  const dashboard = await fetchDashboardData() ?? demoDashboard;
 
   // Fetch all live data in parallel
   const [spotResult, icpswapResult, poolResult] = await Promise.allSettled([
@@ -1317,15 +1346,17 @@ async function bootstrap() {
     fetchICPSwapPoolStats(),
   ]);
 
-  liveIcpUsd    = spotResult.value?.icpUsd ?? null;
-  liveMgsnUsd   = icpswapResult.value?.mgsnUsd ?? null;
-  liveBobUsd    = icpswapResult.value?.bobUsd  ?? null;
+  const icpSpotLive = spotResult.value?.icpUsd != null;
+  liveIcpUsd    = spotResult.value?.icpUsd ?? dashboard.timeline.at(-1)?.icpPrice ?? null;
+  liveMgsnUsd   = icpswapResult.value?.mgsnUsd ?? dashboard.timeline.at(-1)?.mgsnPrice ?? null;
+  liveBobUsd    = icpswapResult.value?.bobUsd  ?? dashboard.timeline.at(-1)?.bobPrice ?? null;
   livePoolStats = poolResult.value ?? {};
 
   const sig  = computeSignals(dashboard, liveIcpUsd, liveMgsnUsd, liveBobUsd);
   const bt   = runDCABacktest(dashboard, 100, liveMgsnUsd, liveBobUsd);
   const lp   = estimateLPYield(sig.mgsnNow, sig.icpNow, 500, dashboard, livePoolStats);
-  const arb  = computeArbitrageScore(liveMgsnUsd, bt.projectedNow, dashboard.timeline.at(-1).mgsnPrice);
+  const historicalMgsn = dashboard.timeline.at(-2)?.mgsnPrice ?? dashboard.timeline.at(-1).mgsnPrice;
+  const arb  = computeArbitrageScore(liveMgsnUsd, bt.projectedNow, historicalMgsn);
 
   // Initial portfolio from default inputs
   const defPort = computePortfolioPnl(1_000_000, 0.0000140, sig.mgsnNow, bt.projectedNow);
@@ -1377,7 +1408,10 @@ async function bootstrap() {
   // Update price display
   if (liveIcpUsd) {
     const el = document.getElementById("s-icp-price");
-    if (el) { el.textContent = `$${liveIcpUsd.toFixed(2)}`; el.classList.add("live"); }
+    if (el) {
+      el.textContent = `$${liveIcpUsd.toFixed(2)}`;
+      el.classList.toggle("live", icpSpotLive);
+    }
   }
   if (liveMgsnUsd) {
     const el = document.getElementById("s-mgsn-price");
@@ -1401,7 +1435,10 @@ async function bootstrap() {
 
     if (newIcp) {
       const el = document.getElementById("s-icp-price");
-      if (el) { el.textContent = `$${newIcp.toFixed(2)}`; el.classList.add("live"); }
+      if (el) {
+        el.textContent = `$${newIcp.toFixed(2)}`;
+        el.classList.toggle("live", spot.value?.icpUsd != null);
+      }
     }
     if (newMgsn) {
       const el = document.getElementById("s-mgsn-price");

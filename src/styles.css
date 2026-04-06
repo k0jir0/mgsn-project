@@ -44,7 +44,7 @@ body {
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   color: var(--ink);
   background: var(--bg);
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 button, input, select { font: inherit; }

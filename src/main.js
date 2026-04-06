@@ -1,6 +1,26 @@
 ﻿import "./styles.css";
 import Chart from "chart.js/auto";
 
+// Crosshair plugin — draws a vertical tracking line at the hovered data index
+Chart.register({
+  id: "crosshair",
+  afterDraw(chart) {
+    if (!chart.tooltip._active?.length) return;
+    const ctx = chart.ctx;
+    const x = chart.tooltip._active[0].element.x;
+    const { top, bottom } = chart.chartArea;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(148,163,184,0.35)";
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.restore();
+  },
+});
+
 // Force any waiting service worker to activate immediately so new deploys
 // take effect without requiring a manual SW unregister.
 if ("serviceWorker" in navigator) {
@@ -12,9 +32,8 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-import { createBackendActor }  from "./actor";
-import { demoDashboard }       from "./demoData";
-import { fetchLiveSpotPrices } from "./liveData";
+import { demoDashboard } from "./demoData";
+import { fetchDashboardData } from "./liveData";
 
 // ── Color palette ─────────────────────────────────────────────────────────────
 
@@ -113,6 +132,10 @@ function compactMoney(v) {
   }).format(v);
 }
 
+function fmtMaybeMoney(v, fallback = "—") {
+  return v == null ? fallback : compactMoney(v);
+}
+
 function pct(start, end) {
   if (start === 0) return 0;
   return ((end - start) / start) * 100;
@@ -121,6 +144,26 @@ function pct(start, end) {
 function pctFmt(v, decimals = 1) {
   const sign = v > 0 ? "+" : "";
   return `${sign}${v.toFixed(decimals)}%`;
+}
+
+function formatUpdatedAt(updatedAt) {
+  if (updatedAt == null) return "—";
+  try {
+    const millis = typeof updatedAt === "bigint"
+      ? Number(updatedAt / 1_000_000n)
+      : Math.floor(Number(updatedAt) / 1_000_000);
+    return new Date(millis).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "UTC",
+      timeZoneName: "short",
+    });
+  } catch {
+    return "—";
+  }
 }
 
 // ── Chart.js base options ──────────────────────────────────────────────────────
@@ -265,6 +308,10 @@ function renderYieldChart(series) {
       },
     },
   };
+  opts.plugins.tooltip.callbacks.label = (ctx) => {
+    if (ctx.dataset.yAxisID === "y2") return ` ${ctx.dataset.label}: ${compactMoney(ctx.raw)}`;
+    return ` ${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%`;
+  };
   mkChart("yield", {
     type: "bar",
     data: {
@@ -334,6 +381,10 @@ function renderNavChart(series, dashboard) {
       },
     },
   };
+  opts2.plugins.tooltip.callbacks.label = (ctx) => {
+    if (ctx.dataset.yAxisID === "y2") return ` ${ctx.dataset.label}: ${ctx.raw.toFixed(3)}×`;
+    return ` ${ctx.dataset.label}: ${compactMoney(ctx.raw)}`;
+  };
   mkChart("nav", {
     type: "line",
     data: {
@@ -399,6 +450,13 @@ function renderVolatilityChart(series) {
 // Panel 9 — Trading Volume & Liquidity (same as SaylorTracker)
 function renderVolumeChart(series) {
   const labels = series.map((p) => p.period.split(" ")[0]);
+  const liquidity = series.map((p) => {
+    const bob = Number.isFinite(p.bobLiquidity) ? p.bobLiquidity : null;
+    const mgsn = Number.isFinite(p.mgsnLiquidity) ? p.mgsnLiquidity : null;
+    if (bob == null && mgsn == null) return null;
+    return (bob ?? 0) + (mgsn ?? 0);
+  });
+  const hasLiquidity = liquidity.some((v) => v != null);
   const opts = {
     ...baseOpts(),
     scales: {
@@ -417,6 +475,7 @@ function renderVolumeChart(series) {
       },
     },
   };
+  opts.plugins.tooltip.callbacks.label = (ctx) => ` ${ctx.dataset.label}: ${compactMoney(ctx.raw)}`;
   mkChart("volume", {
     type: "bar",
     data: {
@@ -426,8 +485,10 @@ function renderVolumeChart(series) {
           backgroundColor: "rgba(59,130,246,0.5)", borderRadius: 3, yAxisID: "y" },
         { type: "bar",  label: "MGSN volume",     data: series.map((p) => p.mgsnVolume),
           backgroundColor: "rgba(249,115,22,0.5)", borderRadius: 3, yAxisID: "y" },
-        { type: "line", label: "Total liquidity", data: series.map((p) => p.bobLiquidity + p.mgsnLiquidity),
-          borderColor: C.pos, borderWidth: 2, pointRadius: 0, tension: 0.35, yAxisID: "y2" },
+        ...(hasLiquidity
+          ? [{ type: "line", label: "Total liquidity", data: liquidity,
+              borderColor: C.pos, borderWidth: 2, pointRadius: 0, tension: 0.35, yAxisID: "y2" }]
+          : []),
       ],
     },
     options: opts,
@@ -520,7 +581,11 @@ function computeMetrics(dashboard) {
   const unrealisedUsd = (last.mgsnPrice - avgCostMgsn) * dashboard.mgsnSupply;
   const unrealisedPct = pct(avgCostMgsn, last.mgsnPrice);
 
-  const totalLiq     = last.bobLiquidity + last.mgsnLiquidity;
+  const liqParts     = [last.bobLiquidity, last.mgsnLiquidity]
+    .filter((value) => Number.isFinite(value));
+  const fallbackLiq  = liqParts.length
+    ? liqParts.reduce((sum, value) => sum + value, 0)
+    : null;
   const icpLive      = state.liveIcpUsd ?? last.icpPrice;
 
   // BTC-Yield equivalent: % change in mNAV ratio from first to last
@@ -537,8 +602,9 @@ function computeMetrics(dashboard) {
     last, mgsnCap, bobCap, nav, mNavRatio, navPremium,
     mgsnChange, bobChange, icpChange,
     avgCostMgsn, avgCostIcp, unrealisedUsd, unrealisedPct,
-    totalLiq, icpLive,
+    totalLiq: dashboard.marketStats?.totalLiquidityUsd ?? fallbackLiq, icpLive,
     mNavYield, mgsnIcp, bobIcp,
+    asOf: formatUpdatedAt(dashboard.updatedAt),
   };
 }
 
@@ -623,13 +689,19 @@ function buildTopHeaderHTML(m) {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-function buildSidebarHTML() {
+function buildSidebarHTML(dashboard) {
   const toggles = PANELS.map((p) => `
     <label class="toggle-item">
       <input type="checkbox" data-panel="${p.id}"${state.visible.has(p.id) ? " checked" : ""}>
       <span class="toggle-dot" style="background:${p.dot}"></span>
       ${p.label}
     </label>`).join("");
+  const historyLine = dashboard.marketStats?.historyStartLabel
+    ? `History: ${dashboard.marketStats.historyStartLabel} - ${dashboard.marketStats.historyEndLabel}`
+    : "History: fallback snapshot";
+  const statsLine = dashboard.marketStats?.mgsnVol24h != null || dashboard.marketStats?.bobVol24h != null
+    ? `24h volume: BOB ${fmtMaybeMoney(dashboard.marketStats?.bobVol24h)} · MGSN ${fmtMaybeMoney(dashboard.marketStats?.mgsnVol24h)}`
+    : "Live token stats unavailable";
 
   return `
     <nav class="sidebar" id="sidebar">
@@ -671,8 +743,9 @@ function buildSidebarHTML() {
       </div>
 
       <div class="sidebar-footer">
-        <p>Data: ICPSwap · CoinGecko</p>
-        <p>ICPSwap TVL: $3.22M · Pairs: 1,951</p>
+        <p>Data: ICPSwap canisters · CoinGecko</p>
+        <p>${historyLine}</p>
+        <p>${statsLine}</p>
       </div>
     </nav>
     <div class="sidebar-backdrop" id="sidebar-backdrop"></div>`;
@@ -689,13 +762,25 @@ function buildMainHTML(dashboard, m) {
     ? `+${m.navPremium.toFixed(2)}% premium to NAV`
     : `${m.navPremium.toFixed(2)}% discount to NAV`;
 
+  const historySummary = dashboard.marketStats?.historyStartLabel
+    ? `${dashboard.marketStats.historyStartLabel} - ${dashboard.marketStats.historyEndLabel} monthly closes + live spot`
+    : "Fallback snapshot";
+  const volatilitySource = dashboard.marketStats?.historyStartLabel
+    ? "ICPSwap monthly OHLC history"
+    : "Fallback snapshot";
+  const volumeChips = [
+    { label: "BOB 24h vol", value: fmtMaybeMoney(dashboard.marketStats?.bobVol24h), cls: "bob" },
+    { label: "MGSN 24h vol", value: fmtMaybeMoney(dashboard.marketStats?.mgsnVol24h), cls: "mgsn" },
+    { label: "MGSN 30d vol", value: fmtMaybeMoney(dashboard.marketStats?.mgsnVol30d) },
+    { label: "Liquidity", value: fmtMaybeMoney(m.totalLiq, "Unavailable") },
+  ];
+
   // Panel 1: Reserve (SaylorTracker's top panel with hero stats)
   const reserveSection = `
     <div class="chart-panel chart-panel--reserve${state.visible.has("reserve") ? "" : " hidden"}" id="panel-reserve" data-panel="reserve">
       ${panelHeader("Token Purchases", "Cumulative MGSN & BOB market capitalization", "reserve",
           ["Token Reserve", "Market Value"])}
       <div class="chart-canvas-wrapper"><canvas id="chart-reserve" width="800" height="340"></canvas></div>
-      <p class="drag-hint">Drag the handles or selection area to zoom into different time periods</p>
       <div class="reserve-stats-row">
         <div class="reserve-main-stat">
           <span class="reserve-share-label">MGSN Reserve Value</span>
@@ -719,7 +804,7 @@ function buildMainHTML(dashboard, m) {
           </div>
           <div class="meta-item">
             <span class="meta-label">As of</span>
-            <span class="meta-date">Apr 5, 2026</span>
+            <span class="meta-date">${m.asOf}</span>
           </div>
         </div>
       </div>
@@ -743,7 +828,7 @@ function buildMainHTML(dashboard, m) {
         <div class="main-header-row">
           <div>
             <h2 class="main-title">Financial Charts</h2>
-            <p class="main-subtitle">Interactive analysis with individual time controls • Drag on charts to select ranges</p>
+            <p class="main-subtitle">Interactive analysis with individual time controls • ${historySummary}</p>
           </div>
         </div>
       </div>
@@ -792,15 +877,11 @@ function buildMainHTML(dashboard, m) {
         ])}
 
         ${cp("volatility", "Volatility Comparison", "Rolling 3-period standard deviation · MGSN · BOB · ICP", [
-          { label: "Source",    value: "ICPSwap seeded data" },
+          { label: "Source",    value: volatilitySource },
           { label: "ICP vol",   value: "Benchmark reference", cls: "icp" },
         ])}
 
-        ${cp("volume", "Trading Volume & Liquidity", "Monthly trading volumes · total ICPSwap liquidity depth", [
-          { label: "Total liquidity", value: compactMoney(m.totalLiq) },
-          { label: "ICPSwap TVL",     value: "$3.22M" },
-          { label: "Total pairs",     value: "1,951" },
-        ])}
+        ${cp("volume", "Trading Volume & Liquidity", "Monthly on-chain volume history with current ICPSwap token-volume snapshots", volumeChips)}
 
         ${cp("raises", "Token Accumulation", "Cumulative trading volume — proxy for total on-chain accumulation activity", [
           { label: "Cumul. BOB vol",  value: compactMoney(dashboard.timeline.reduce((s, p) => s + p.bobVolume, 0)),  cls: "bob"  },
@@ -901,7 +982,7 @@ function render(app, dashboard) {
   app.innerHTML =
     buildTopHeaderHTML(m) +
     `<div class="page-body">
-       ${buildSidebarHTML()}
+       ${buildSidebarHTML(dashboard)}
        ${buildMainHTML(dashboard, m)}
      </div>`;
   attachEvents(app, dashboard);
@@ -921,18 +1002,10 @@ async function bootstrap() {
       <span class="loading-text">Loading MGSN Strategy Tracker…</span>
     </div>`;
 
-  // Try the live canister first; fall back to demoDashboard if unavailable.
-  // MetricPoint now includes icpPrice so all derived metrics work correctly.
-  let dashboard = demoDashboard;
-  const actor = createBackendActor();
-  if (actor) {
-    try {
-      const live = await actor.getDashboard();
-      // Validate the first timeline entry has icpPrice before switching
-      if (live?.timeline?.length && live.timeline[0].icpPrice != null) {
-        dashboard = live;
-      }
-    } catch { /* canister unreachable — fall through to demoDashboard */ }
+  let dashboard = await fetchDashboardData();
+  if (!dashboard) dashboard = demoDashboard;
+  if (dashboard.marketStats?.icpSpotLive) {
+    state.liveIcpUsd = dashboard.timeline.at(-1)?.icpPrice ?? null;
   }
 
   try {
@@ -942,27 +1015,13 @@ async function bootstrap() {
     return;
   }
 
-  // Non-blocking live ICP price (CSP allows 'self' only — fetch may be blocked;
-  // the catch inside fetchLiveSpotPrices handles that gracefully)
-  fetchLiveSpotPrices().then(({ icpUsd }) => {
-    if (icpUsd) {
-      state.liveIcpUsd = icpUsd;
-      document.querySelectorAll("#icp-price-val, #sidebar-icp-val").forEach((el) => {
-        el.textContent = `$${icpUsd.toFixed(2)}`;
-        el.classList.add("live");
-      });
-    }
-  });
-
-  // Poll every 60 s
   setInterval(async () => {
-    const { icpUsd } = await fetchLiveSpotPrices();
-    if (icpUsd) {
-      state.liveIcpUsd = icpUsd;
-      document.querySelectorAll("#icp-price-val, #sidebar-icp-val").forEach((el) => {
-        el.textContent = `$${icpUsd.toFixed(2)}`;
-        el.classList.add("live");
-      });
+    const nextDashboard = await fetchDashboardData(true);
+    if (nextDashboard) {
+      state.liveIcpUsd = nextDashboard.marketStats?.icpSpotLive
+        ? nextDashboard.timeline.at(-1)?.icpPrice ?? state.liveIcpUsd
+        : state.liveIcpUsd;
+      render(app, nextDashboard);
     }
   }, 60_000);
 }

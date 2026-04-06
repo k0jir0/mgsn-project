@@ -1,14 +1,36 @@
 import "./styles.css";
 import Chart from "chart.js/auto";
-import { demoDashboard, BUYBACK_LOG, BUYBACK_PROGRAM, TOKEN_CANISTERS } from "./demoData";
+
+// Crosshair plugin — draws a vertical tracking line at the hovered data index
+Chart.register({
+  id: "crosshair",
+  afterDraw(chart) {
+    if (!chart.tooltip._active?.length) return;
+    const ctx = chart.ctx;
+    const x = chart.tooltip._active[0].element.x;
+    const { top, bottom } = chart.chartArea;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(148,163,184,0.35)";
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.restore();
+  },
+});
+
+import { demoDashboard, BUYBACK_PROGRAM, TOKEN_CANISTERS } from "./demoData";
 import { fetchLiveSpotPrices, fetchICPSwapPrices, fetchICPSwapPoolStats } from "./liveData";
+import { fetchBuybackProgramData } from "./onChainData.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ICPSWAP_SWAP_URL =
-  "https://app.icpswap.com/swap?input=ryjl3-tyaaa-aaaaa-aaaba-cai&output=mgsn7-iiaaa-aaaag-qjvsa-cai";
+  `https://app.icpswap.com/swap?input=${TOKEN_CANISTERS.ICP}&output=${TOKEN_CANISTERS.MGSN}`;
 const ICPSWAP_LP_URL =
-  "https://app.icpswap.com/liquidity/add/ryjl3-tyaaa-aaaaa-aaaba-cai/mgsn7-iiaaa-aaaag-qjvsa-cai";
+  `https://app.icpswap.com/liquidity/add/${TOKEN_CANISTERS.ICP}/${TOKEN_CANISTERS.MGSN}`;
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -27,15 +49,17 @@ function compactMoney(v) {
     notation: "compact", maximumFractionDigits: 2,
   }).format(v);
 }
+function fmtMaybeMoney(v, d = 2) {
+  return typeof v === "number" && Number.isFinite(v) ? fmt(v, d) : "Unavailable";
+}
 function pct(from, to) { return from === 0 ? 0 : ((to - from) / from) * 100; }
 function pctFmt(v, d = 1) { return `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`; }
 
 // ── Buyback math ──────────────────────────────────────────────────────────────
 
 function projectBuybackSchedule(livePoolStats, depositUsd, months = 12) {
-  const monthlyVol = livePoolStats?.mgsnVol24h
-    ? livePoolStats.mgsnVol24h * 30
-    : BUYBACK_PROGRAM.monthlyVolEst;
+  const monthlyVol = livePoolStats?.mgsnVol30d
+    ?? (livePoolStats?.mgsnVol24h ? livePoolStats.mgsnVol24h * 30 : BUYBACK_PROGRAM.monthlyVolEst);
 
   const poolTvl    = livePoolStats?.mgsnLiq ?? BUYBACK_PROGRAM.poolTvlUsd;
   const userShare  = depositUsd / (poolTvl + depositUsd);
@@ -48,7 +72,14 @@ function projectBuybackSchedule(livePoolStats, depositUsd, months = 12) {
     cumUsd  += pledgeAmt;
     rows.push({ month: m, pledgeUsd: pledgeAmt, cumUsd });
   }
-  return { rows, monthlyFee, pledgeAmt, userShare: userShare * 100 };
+  return {
+    rows,
+    monthlyFee,
+    pledgeAmt,
+    userShare: userShare * 100,
+    volumeEstimated: livePoolStats?.mgsnVol30d == null && livePoolStats?.mgsnVol24h == null,
+    liquidityEstimated: livePoolStats?.mgsnLiq == null,
+  };
 }
 
 function computeTotals(log) {
@@ -125,25 +156,33 @@ function logRow(entry, idx) {
   return `
     <div class="bb-log-row">
       <span class="bb-log-date">${entry.date}</span>
-      <span class="bb-log-usd">${fmt(entry.usdSpent)}</span>
+      <span class="bb-log-usd">${fmtMaybeMoney(entry.usdSpent)}</span>
       <span class="bb-log-tokens">${compact(entry.mgsnAcquired)} MGSN</span>
       <span class="bb-log-note">${entry.note ?? ""}</span>
       ${entry.txId ? `<a class="bb-log-tx" href="https://www.icpexplorer.com/transaction/${entry.txId}" target="_blank" rel="noopener noreferrer">TX ↗</a>` : `<span class="bb-log-tx bb-log-tx--na">—</span>`}
     </div>`;
 }
 
-function buildHTML(log, schedule, totals, livePoolStats, mgsnNow, icpNow) {
-  const liveTag = livePoolStats?.mgsnVol24h
-    ? `<span class="bb-live-tag">live ICPSwap data</span>`
+function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, totalSupply) {
+  const hasRealVolume = livePoolStats?.mgsnVol30d != null || livePoolStats?.mgsnVol24h != null;
+  const liveTag = hasRealVolume
+    ? `<span class="bb-live-tag">real ICPSwap volume</span>`
     : `<span class="bb-live-tag bb-live-tag--est">estimated</span>`;
 
-  const logSection = log.length === 0
-    ? `<p class="bb-empty">No buybacks executed yet. The first scheduled buyback is <strong>${BUYBACK_PROGRAM.nextBuybackDate}</strong>.</p>`
-    : `
+  let logSection;
+  if (log.length > 0) {
+    logSection = `
       <div class="bb-log-header">
         <span>Date</span><span>USD spent</span><span>MGSN acquired</span><span>Note</span><span>TX</span>
       </div>
       ${log.map(logRow).join("")}`;
+  } else if (buybackState?.status === "unconfigured") {
+    logSection = `<p class="bb-empty">On-chain buyback indexing is ready, but the public buyback vault address has not been published yet. Once that address is disclosed, executed buybacks will appear automatically here. The next scheduled buyback remains <strong>${BUYBACK_PROGRAM.nextBuybackDate}</strong>.</p>`;
+  } else if (buybackState?.status === "unavailable") {
+    logSection = `<p class="bb-empty">The MGSN ledger could not be reached, so the buyback log could not be refreshed right now.</p>`;
+  } else {
+    logSection = `<p class="bb-empty">No on-chain inflows into the public buyback vault have been detected yet.</p>`;
+  }
 
   return `
     <header class="top-header">
@@ -260,7 +299,7 @@ function buildHTML(log, schedule, totals, livePoolStats, mgsnNow, icpNow) {
           <div class="bb-effect-card">
             <div class="bb-effect-icon">↓</div>
             <div class="bb-effect-title">Reduces circulating supply</div>
-            <p class="bb-effect-body">Every buyback permanently removes MGSN from the market. With a fixed total supply of ${compact(demoDashboard.mgsnSupply)} tokens, supply reduction directly improves the price-to-value ratio for remaining holders.</p>
+            <p class="bb-effect-body">Every buyback permanently removes MGSN from the market. With a live circulating supply of ${compact(totalSupply)} tokens, supply reduction directly improves the price-to-value ratio for remaining holders.</p>
           </div>
           <div class="bb-effect-card">
             <div class="bb-effect-icon">↑</div>
@@ -283,7 +322,7 @@ function buildHTML(log, schedule, totals, livePoolStats, mgsnNow, icpNow) {
       <!-- Public buyback log -->
       <section class="bb-section">
         <h2 class="bb-section-title">Public buyback log</h2>
-        <p class="bb-section-sub">Every buyback executed under this programme, in chronological order. Transaction IDs link to the ICP block explorer.</p>
+        <p class="bb-section-sub">Every buyback executed under this programme, in chronological order. ${buybackState?.note ?? "Transaction indexing is pending."}</p>
         <div class="bb-log">${logSection}</div>
       </section>
 
@@ -319,6 +358,8 @@ function renderCalc(livePoolStats, mgsnNow) {
     resEl.innerHTML = `
       <div class="bb-calc-divider"></div>
       <div class="bb-calc-row"><span class="bb-calc-label">Your pool share</span><span class="bb-calc-val">${schedule.userShare.toFixed(2)}%</span></div>
+      <div class="bb-calc-row"><span class="bb-calc-label">Volume basis</span><span class="bb-calc-val">${schedule.volumeEstimated ? "Configured estimate" : "ICPSwap 30d history"}</span></div>
+      <div class="bb-calc-row"><span class="bb-calc-label">Liquidity basis</span><span class="bb-calc-val">${schedule.liquidityEstimated ? "Configured TVL estimate" : "Live pool TVL"}</span></div>
       <div class="bb-calc-row"><span class="bb-calc-label">Monthly fee income</span><span class="bb-calc-val pos">${fmt(schedule.monthlyFee)}</span></div>
       <div class="bb-calc-row"><span class="bb-calc-label">Monthly buyback pledge (${BUYBACK_PROGRAM.pledgePct}%)</span><span class="bb-calc-val mgsn">${fmt(schedule.pledgeAmt)}</span></div>
       <div class="bb-calc-row"><span class="bb-calc-label">Annual buyback from your share</span><span class="bb-calc-val mgsn">${fmt(annual)}</span></div>
@@ -441,19 +482,28 @@ async function bootstrap() {
   const app = document.querySelector("#app");
   app.innerHTML = `<div class="loading-screen"><div class="loading-logo">M</div><span class="loading-text">Loading buyback data…</span></div>`;
 
-  const [spotResult, icpswapResult, poolResult] = await Promise.allSettled([
+  const [spotResult, icpswapResult, poolResult, buybackResult] = await Promise.allSettled([
     fetchLiveSpotPrices(),
     fetchICPSwapPrices(),
     fetchICPSwapPoolStats(),
+    fetchBuybackProgramData(),
   ]);
 
   const mgsnNow    = icpswapResult.value?.mgsnUsd ?? demoDashboard.timeline.at(-1).mgsnPrice;
   const icpNow     = spotResult.value?.icpUsd     ?? demoDashboard.timeline.at(-1).icpPrice;
   const livePoolStats = poolResult.value ?? {};
+  const buybackState = buybackResult.value ?? {
+    status: "unavailable",
+    log: [],
+    note: "The MGSN ledger could not be reached to verify buybacks.",
+    currentSupply: demoDashboard.mgsnSupply,
+  };
+  const buybackLog = buybackState.log ?? [];
+  const totalSupply = buybackState.currentSupply ?? demoDashboard.mgsnSupply;
 
-  const totals = computeTotals(BUYBACK_LOG);
+  const totals = computeTotals(buybackLog);
 
-  app.innerHTML = buildHTML(BUYBACK_LOG, null, totals, livePoolStats, mgsnNow, icpNow);
+  app.innerHTML = buildHTML(buybackLog, totals, livePoolStats, mgsnNow, icpNow, buybackState, totalSupply);
 
   const initialDeposit = 500;
   renderCalc(livePoolStats, mgsnNow);

@@ -1,17 +1,38 @@
 import "./styles.css";
 import Chart from "chart.js/auto";
+
+// Crosshair plugin — draws a vertical tracking line at the hovered data index
+Chart.register({
+  id: "crosshair",
+  afterDraw(chart) {
+    if (!chart.tooltip._active?.length) return;
+    const ctx = chart.ctx;
+    const x = chart.tooltip._active[0].element.x;
+    const { top, bottom } = chart.chartArea;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(148,163,184,0.35)";
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.restore();
+  },
+});
+
 import {
   demoDashboard,
   STAKING_PROGRAM,
-  STAKING_POSITIONS,
   TOKEN_CANISTERS,
 } from "./demoData";
 import { fetchLiveSpotPrices, fetchICPSwapPrices, fetchICPSwapPoolStats } from "./liveData";
+import { fetchStakingProgramData } from "./onChainData.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ICPSWAP_SWAP_URL =
-  "https://app.icpswap.com/swap?input=ryjl3-tyaaa-aaaaa-aaaba-cai&output=mgsn7-iiaaa-aaaag-qjvsa-cai";
+  `https://app.icpswap.com/swap?input=${TOKEN_CANISTERS.ICP}&output=${TOKEN_CANISTERS.MGSN}`;
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -38,9 +59,8 @@ function compactMoney(v) {
  * = monthly trading volume × fee rate × revenueSharePct / 100
  */
 function monthlyRewardPool(livePoolStats) {
-  const monthlyVol = livePoolStats?.mgsnVol24h
-    ? livePoolStats.mgsnVol24h * 30
-    : STAKING_PROGRAM.monthlyVolEst;
+  const monthlyVol = livePoolStats?.mgsnVol30d
+    ?? (livePoolStats?.mgsnVol24h ? livePoolStats.mgsnVol24h * 30 : STAKING_PROGRAM.monthlyVolEst);
   return monthlyVol * STAKING_PROGRAM.poolFee * (STAKING_PROGRAM.revenueSharePct / 100);
 }
 
@@ -86,17 +106,26 @@ function projectRewards(mgsnAmount, tier, totalStakedMgsn, totalWeightedStake, m
 }
 
 /**
- * Compute total staking metrics from current STAKING_POSITIONS snapshot.
+ * Compute total staking metrics from current on-chain staking state.
  */
-function computeStakingMetrics(mgsnNow) {
-  const totalMgsn   = STAKING_POSITIONS.reduce((a, p) => a + (p.mgsnLocked ?? 0), 0);
-  const totalWeight = STAKING_POSITIONS.reduce((a, p) => {
+function computeStakingMetrics(mgsnNow, stakingState) {
+  const positions = stakingState?.positions ?? [];
+  const totalSupply = stakingState?.currentSupply ?? demoDashboard.mgsnSupply;
+  const totalMgsn   = positions.reduce((a, p) => a + (p.mgsnLocked ?? 0), 0);
+  const totalWeight = positions.reduce((a, p) => {
     const tier = STAKING_PROGRAM.tiers.find((t) => t.label === p.tier) ?? STAKING_PROGRAM.tiers[0];
     return a + (p.mgsnLocked ?? 0) * tier.multiplier;
   }, 0);
-  const pctSupply   = (totalMgsn / demoDashboard.mgsnSupply) * 100;
+  const pctSupply   = totalSupply > 0 ? (totalMgsn / totalSupply) * 100 : 0;
   const valueUsd    = totalMgsn * mgsnNow;
-  return { totalMgsn, totalWeight, pctSupply, valueUsd, positionCount: STAKING_POSITIONS.length };
+  return {
+    totalMgsn,
+    totalWeight,
+    pctSupply,
+    totalSupply,
+    valueUsd,
+    positionCount: positions.length,
+  };
 }
 
 // ── Chart ─────────────────────────────────────────────────────────────────────
@@ -226,13 +255,19 @@ function tierCard(tier, metrics, livePoolStats, mgsnNow) {
 
 // ── HTML builder ──────────────────────────────────────────────────────────────
 
-function buildHTML(metrics, livePoolStats, mgsnNow, icpNow) {
+function buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState) {
   const monthly    = monthlyRewardPool(livePoolStats);
-  const liveTag    = livePoolStats?.mgsnVol24h
-    ? `<span class="sk-live-tag">live ICPSwap data</span>`
+  const hasRealVolume = livePoolStats?.mgsnVol30d != null || livePoolStats?.mgsnVol24h != null;
+  const liveTag    = hasRealVolume
+    ? `<span class="sk-live-tag">real ICPSwap volume</span>`
     : `<span class="sk-live-tag sk-live-tag--est">estimated</span>`;
-  const effectiveFloat = demoDashboard.mgsnSupply - metrics.totalMgsn;
+  const effectiveFloat = metrics.totalSupply - metrics.totalMgsn;
   const floatReduction  = metrics.pctSupply;
+  const statusBanner = stakingState?.status === "unconfigured"
+    ? `No public staking canister is configured yet. This page will switch from projected positions to real on-chain positions automatically once the contract is published.`
+    : stakingState?.status === "pending_interface"
+      ? `A staking canister ID is configured, but the public position interface still needs to be wired before lock tiers and unlock dates can be read here.`
+      : `Staking positions are coming directly from the on-chain program.`;
 
   return `
     <header class="top-header">
@@ -292,7 +327,7 @@ function buildHTML(metrics, livePoolStats, mgsnNow, icpNow) {
           </div>
           <div class="sk-coming-soon-banner">
             <span class="sk-coming-soon-icon">◎</span>
-            <span>Staking contracts deploy <strong>${STAKING_PROGRAM.launchDate}</strong>. Register interest below to be notified.</span>
+            <span>${statusBanner}</span>
           </div>
         </div>
         <div class="sk-hero-right">
@@ -397,8 +432,8 @@ function buildHTML(metrics, livePoolStats, mgsnNow, icpNow) {
                 <span>% locked</span><span>Float remaining</span><span>USD value locked</span>
               </div>
               ${[0, 5, 10, 20, 30].map((pct) => {
-                const locked = Math.round(demoDashboard.mgsnSupply * pct / 100);
-                const float  = demoDashboard.mgsnSupply - locked;
+                const locked = Math.round(metrics.totalSupply * pct / 100);
+                const float  = metrics.totalSupply - locked;
                 const usd    = locked * mgsnNow;
                 return `<div class="sk-supply-row${pct === Math.round(floatReduction) ? " sk-supply-row--current" : ""}">
                   <span class="${pct > 0 ? "violet" : "muted"}">${pct}%${pct === 0 ? " (none)" : ""}</span>
@@ -498,6 +533,7 @@ function renderCalc(metrics, livePoolStats, mgsnNow) {
   const amount  = parseFloat(document.getElementById("sk-amount")?.value) || 1_000_000;
   const tierIdx = parseInt(document.getElementById("sk-tier")?.value ?? "1");
   const tier    = STAKING_PROGRAM.tiers[tierIdx] ?? STAKING_PROGRAM.tiers[1];
+  const hasRealVolume = livePoolStats?.mgsnVol30d != null || livePoolStats?.mgsnVol24h != null;
 
   const totalStaked  = metrics.totalMgsn  || 1_000_000;  // use 1M as baseline if no stakers yet
   const totalWeight  = metrics.totalWeight || 1_000_000;
@@ -517,6 +553,7 @@ function renderCalc(metrics, livePoolStats, mgsnNow) {
       <div class="sk-calc-row"><span class="sk-calc-label">Est. annual reward</span><span class="sk-calc-val pos">${fmt(r.annual)}</span></div>
       <div class="sk-calc-row"><span class="sk-calc-label">Est. APY</span><span class="sk-calc-val violet">${r.apy.toFixed(1)}%</span></div>
       <div class="sk-calc-row"><span class="sk-calc-label">Stake value (USD)</span><span class="sk-calc-val">${fmt(r.stakeValueUsd)}</span></div>
+      <div class="sk-calc-row"><span class="sk-calc-label">Volume basis</span><span class="sk-calc-val">${hasRealVolume ? "ICPSwap 30d history" : "Configured estimate"}</span></div>
       <div class="sk-calc-row sk-calc-row--note"><span>Monthly reward pool (total)</span><span>${fmt(monthlyRewardPool(livePoolStats))}</span></div>`;
   }
 
@@ -680,19 +717,28 @@ async function bootstrap() {
   const app = document.querySelector("#app");
   app.innerHTML = `<div class="loading-screen"><div class="loading-logo">M</div><span class="loading-text">Loading staking data…</span></div>`;
 
-  const [spotResult, icpswapResult, poolResult] = await Promise.allSettled([
+  const [spotResult, icpswapResult, poolResult, stakingResult] = await Promise.allSettled([
     fetchLiveSpotPrices(),
     fetchICPSwapPrices(),
     fetchICPSwapPoolStats(),
+    fetchStakingProgramData(),
   ]);
 
   const mgsnNow       = icpswapResult.value?.mgsnUsd     ?? demoDashboard.timeline.at(-1).mgsnPrice;
   const icpNow        = spotResult.value?.icpUsd         ?? demoDashboard.timeline.at(-1).icpPrice;
   const livePoolStats = poolResult.value ?? {};
+  const stakingState  = stakingResult.value ?? {
+    status: "unconfigured",
+    currentSupply: demoDashboard.mgsnSupply,
+    positions: [],
+    totalLocked: 0,
+    totalWeight: 0,
+    note: "No public staking canister is configured yet.",
+  };
 
-  const metrics = computeStakingMetrics(mgsnNow);
+  const metrics = computeStakingMetrics(mgsnNow, stakingState);
 
-  app.innerHTML = buildHTML(metrics, livePoolStats, mgsnNow, icpNow);
+  app.innerHTML = buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState);
 
   renderCalc(metrics, livePoolStats, mgsnNow);
   renderSupplyChart(metrics.pctSupply);

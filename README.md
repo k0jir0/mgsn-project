@@ -2,7 +2,7 @@
 
 **Live:** https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/
 
-A full-stack analytics and tokenomics dashboard for the $MGSN / $BOB token pair, deployed as an ICP asset canister. Combines real-time market data from ICPSwap with four value-support mechanisms: a 6-signal strategy engine, a protocol-funded buyback program, a revenue-share staking program, and a community burn program.
+A full-stack analytics and tokenomics dashboard for the $MGSN / $BOB token pair, deployed as an ICP asset canister. Combines live market data from ICPSwap canisters with four value-support mechanisms: a 6-signal strategy engine, a protocol-funded buyback program, a revenue-share staking program, and a community burn program.
 
 ---
 
@@ -35,20 +35,20 @@ The buyback and staking programs together consume **100% of LP fee income** and 
 
 | Token | Canister ID |
 |---|---|
-| MGSN | `mgsn7-iiaaa-aaaag-qjvsa-cai` |
+| MGSN | `2rqn6-kiaaa-aaaam-qcuya-cai` |
 | BOB | `7pail-xaaaa-aaaas-aabmq-cai` |
 | ICP | `ryjl3-tyaaa-aaaaa-aaaba-cai` |
 
-ICPSwap swap URL: https://app.icpswap.com/swap?input=ryjl3-tyaaa-aaaaa-aaaba-cai&output=mgsn7-iiaaa-aaaag-qjvsa-cai
+ICPSwap swap URL: https://app.icpswap.com/swap?input=ryjl3-tyaaa-aaaaa-aaaba-cai&output=2rqn6-kiaaa-aaaam-qcuya-cai
 
 ---
 
 ## Stack
 
 - **Frontend:** Vite 7.x multi-page app, Chart.js, vanilla JS ES modules
-- **Backend:** Motoko canister (ICP) — query-only, seeded BOB/MGSN timeline
+- **Backend:** Motoko canister (ICP) — legacy sample canister retained for local experimentation
 - **Deploy:** `icp-cli` to ICP asset canister `yezrb-diaaa-aaaah-qugnq-cai`
-- **Live data:** ICPSwap pool stats + spot price APIs via `src/liveData.js`
+- **Live data:** ICPSwap NodeIndex + TokenStorage canister queries via `src/liveData.js`, plus MGSN ledger/archive queries via `src/onChainData.js`
 
 ---
 
@@ -63,10 +63,11 @@ src/
   burn.js          — Community Burn page (leaderboard, milestones, impact calculator)
   demoData.js      — Shared constants: BUYBACK_PROGRAM, STAKING_PROGRAM, BURN_PROGRAM
   liveData.js      — Live price + pool stat fetchers (ICPSwap, spot APIs)
+  onChainData.js   — MGSN ledger + archive queries (supply, burn history, program status)
   styles.css       — Shared CSS variables and base styles
 
 backend/
-  main.mo          — Motoko canister with seeded BOB/MGSN snapshots
+  main.mo          — Legacy Motoko sample canister (no longer used for production dashboard data)
   backend.did      — Candid interface for bindgen
 
 paper1.txt         — Strategy Engine technical paper
@@ -126,8 +127,20 @@ Pop-Location
 
 ---
 
+## Optional program addresses
+
+If you want the site to auto-index buyback or staking records from public on-chain program addresses, provide these at build time:
+
+- `VITE_MGSN_BUYBACK_ACCOUNT` — dedicated public MGSN buyback vault owner principal
+- `VITE_MGSN_STAKING_CANISTER` — staking canister principal once the contract is published
+
+When those values are unset, the UI reports that the program address is not yet configured instead of showing placeholder logs.
+
+---
+
 ## Notes
 
-- The backend is query-only, which keeps deployment simple and safe.
+- The production dashboard now reads ICPSwap directly in the browser; the backend sample canister remains optional.
+- The burn page now reads MGSN ledger archives directly and auto-indexes blackhole transfers plus native ledger burn operations.
 - On Windows, the `@dfinity/motoko` recipe cannot run because `mops toolchain bin moc` requires Linux. The `icp.yaml` uses a custom build step with a pre-built WASM. Rebuild via Docker whenever `backend/main.mo` changes.
 - Canister ID mappings are in `.icp/cache/mappings/local.ids.json` (gitignored). Preserve IDs from `icp canister status backend` if needed across machines.

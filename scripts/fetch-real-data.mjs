@@ -11,7 +11,7 @@ import https from "https";
 
 // ── Canister IDs ──────────────────────────────────────────────────────────────
 const NODE_INDEX_ID = "ggzvv-5qaaa-aaaag-qck7a-cai";  // ICPSwap NodeIndex
-const MGSN_ID = "mgsn7-iiaaa-aaaag-qjvsa-cai";
+const MGSN_ID = "2rqn6-kiaaa-aaaam-qcuya-cai";
 const BOB_ID  = "7pail-xaaaa-aaaas-aabmq-cai";
 
 // ── Candid: NodeIndex (getAllTokens + tokenStorage) ───────────────────────────
