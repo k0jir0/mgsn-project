@@ -1,6 +1,17 @@
 ﻿import "./styles.css";
 import Chart from "chart.js/auto";
 
+// Force any waiting service worker to activate immediately so new deploys
+// take effect without requiring a manual SW unregister.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((r) => {
+      if (r.waiting) r.waiting.postMessage({ type: "SKIP_WAITING" });
+      r.update();
+    });
+  });
+}
+
 import { createBackendActor }  from "./actor";
 import { demoDashboard }       from "./demoData";
 import { fetchLiveSpotPrices } from "./liveData";
