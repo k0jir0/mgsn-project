@@ -700,6 +700,20 @@ button, input, select { font: inherit; }
 
 /* -- Shared Scenario Studio ------------------------------ */
 
+.scenario-header {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.scenario-header .studio-status-row {
+  margin-top: 0;
+}
+
+.scenario-header .studio-section {
+  padding-top: 0;
+}
+
 .studio-section {
   padding: 16px 0 0;
 }

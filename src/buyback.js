@@ -29,7 +29,7 @@ import {
   applyScenarioToPrices,
   attachScenarioStudio,
   buildBuybackSourceChips,
-  buildScenarioStudioHTML,
+  buildScenarioHeaderHTML,
   buildSimulatedBuybackState,
   loadScenarioState,
   readViewCache,
@@ -174,7 +174,7 @@ function logRow(entry, idx) {
     </div>`;
 }
 
-function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, totalSupply, studioHtml, statusHtml) {
+function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, totalSupply, scenarioHeaderHtml) {
   const hasRealVolume = livePoolStats?.mgsnVol30d != null || livePoolStats?.mgsnVol24h != null;
   const liveTag = buybackState?.status === "simulated"
     ? `<span class="bb-live-tag bb-live-tag--demo">demo showcase</span>`
@@ -222,8 +222,7 @@ function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, to
     </header>
 
     <div class="bb-page">
-      ${statusHtml}
-      ${studioHtml}
+      ${scenarioHeaderHtml}
 
       <!-- Hero -->
       <section class="bb-hero">
@@ -562,12 +561,10 @@ function renderBuybackPage(app, baseState, hydrationMode) {
     prices.icpUsd,
     buybackState,
     totalSupply,
-    buildScenarioStudioHTML({
-      heading: "Buyback Demo Controls",
-      description: "Use one shared showcase state to demonstrate launch-day buyback activity before the public vault address is published.",
-      note: "Live ICPSwap volume still powers the calculator whenever it is available. Demo mode only simulates the execution history and hero totals.",
-    }),
-    buildBuybackSourceChips(buybackState, scenario, hydrationMode)
+    buildScenarioHeaderHTML(
+      "buyback",
+      buildBuybackSourceChips(buybackState, scenario, hydrationMode)
+    )
   );
 
   renderCalc(livePoolStats, prices.mgsnUsd);

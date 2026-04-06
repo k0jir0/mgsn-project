@@ -34,7 +34,7 @@ import {
   applyScenarioToPrices,
   attachScenarioStudio,
   buildDashboardSourceChips,
-  buildScenarioStudioHTML,
+  buildScenarioHeaderHTML,
   getPortfolioDefaults,
   loadScenarioState,
   readViewCache,
@@ -762,7 +762,7 @@ function dcaRow(label, val, cls = "") {
 
 // ── Main HTML builder ─────────────────────────────────────────────────────────
 
-function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio, studioHtml, statusHtml) {
+function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio, scenarioHeaderHtml) {
   const icpVal  = sig.icpNow ? `$${sig.icpNow.toFixed(2)}` : "—";
   const icpCls  = liveIcpUsd ? "live" : "";
   const compBar = Math.round(sig.composite);
@@ -841,8 +841,7 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio, studioHtml, s
     </header>
 
     <div class="s-page">
-      ${statusHtml}
-      ${studioHtml}
+      ${scenarioHeaderHtml}
 
       <!-- Alert board -->
       <section class="s-section" style="padding-top:20px">
@@ -1456,12 +1455,10 @@ function renderStrategyPage(app, baseState, hydrationMode) {
     arb,
     alerts,
     defPort,
-    buildScenarioStudioHTML({
-      heading: "Strategy Demo Controls",
-      description: "Keep live chart history, but synchronize the signal engine, LP assumptions, and portfolio defaults with the same shared scenario state used everywhere else.",
-      note: "Scenario Studio persists across the dashboard, strategy, buyback, staking, and burn pages so one showcase story stays internally consistent.",
-    }),
-    buildDashboardSourceChips(dashboard, scenario, hydrationMode)
+    buildScenarioHeaderHTML(
+      "strategy",
+      buildDashboardSourceChips(dashboard, scenario, hydrationMode)
+    )
   );
 
   const holdingsEl = document.getElementById("port-holdings");
@@ -1536,5 +1533,4 @@ function renderStrategyPage(app, baseState, hydrationMode) {
     if (el) el.textContent = fmt(prices.bobUsd, 4);
   }
 }
-
 

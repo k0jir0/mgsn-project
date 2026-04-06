@@ -38,7 +38,7 @@ import {
   applyScenarioToDashboard,
   attachScenarioStudio,
   buildDashboardSourceChips,
-  buildScenarioStudioHTML,
+  buildScenarioHeaderHTML,
   loadScenarioState,
   readViewCache,
   writeViewCache,
@@ -763,7 +763,7 @@ function buildSidebarHTML(dashboard) {
 
 // ── Main Content ──────────────────────────────────────────────────────────────
 
-function buildMainHTML(dashboard, m, studioHtml, statusHtml) {
+function buildMainHTML(dashboard, m, scenarioHeaderHtml) {
   const changeClass = m.unrealisedPct >= 0 ? "positive" : "negative";
   const changeArrow = m.unrealisedPct >= 0 ? "▲" : "▼";
   const pnlSign     = m.unrealisedPct >= 0 ? "+" : "";
@@ -841,8 +841,7 @@ function buildMainHTML(dashboard, m, studioHtml, statusHtml) {
             <p class="main-subtitle">Interactive analysis with individual time controls • ${historySummary}</p>
           </div>
         </div>
-        ${statusHtml}
-        ${studioHtml}
+        ${scenarioHeaderHtml}
       </div>
       <div class="chart-panels">
 
@@ -1042,12 +1041,10 @@ function render(app, dashboard, hydrationMode = "live") {
        ${buildMainHTML(
          displayDashboard,
          m,
-         buildScenarioStudioHTML({
-           heading: "Dashboard Demo Controls",
-           description: "Scenario Studio persists across the whole site, so chart, strategy, buyback, staking, and burn assumptions stay in sync.",
-           note: "Use the showcase preset to demonstrate the full product loop, or keep live mode enabled to inspect current ICPSwap and ledger-backed data.",
-         }),
-         buildDashboardSourceChips(displayDashboard, scenario, hydrationMode)
+         buildScenarioHeaderHTML(
+           "dashboard",
+           buildDashboardSourceChips(displayDashboard, scenario, hydrationMode)
+         )
        )}
      </div>`;
   attachEvents(app, displayDashboard);

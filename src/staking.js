@@ -32,7 +32,7 @@ import {
   applyScenarioToPoolStats,
   applyScenarioToPrices,
   attachScenarioStudio,
-  buildScenarioStudioHTML,
+  buildScenarioHeaderHTML,
   buildSimulatedStakingState,
   buildStakingSourceChips,
   loadScenarioState,
@@ -266,7 +266,7 @@ function tierCard(tier, metrics, livePoolStats, mgsnNow) {
 
 // ── HTML builder ──────────────────────────────────────────────────────────────
 
-function buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState, studioHtml, statusHtml) {
+function buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState, scenarioHeaderHtml) {
   const monthly    = monthlyRewardPool(livePoolStats);
   const hasRealVolume = livePoolStats?.mgsnVol30d != null || livePoolStats?.mgsnVol24h != null;
   const liveTag    = stakingState?.status === "simulated"
@@ -309,8 +309,7 @@ function buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState, studio
     </header>
 
     <div class="sk-page">
-      ${statusHtml}
-      ${studioHtml}
+      ${scenarioHeaderHtml}
 
       <!-- Hero -->
       <section class="sk-hero">
@@ -796,12 +795,10 @@ function renderStakingPage(app, baseState, hydrationMode) {
     prices.mgsnUsd,
     prices.icpUsd,
     stakingState,
-    buildScenarioStudioHTML({
-      heading: "Staking Demo Controls",
-      description: "Switch between live reward assumptions and a simulated staking book so the lock-tier experience is fully demonstrable.",
-      note: "Until the public staking canister is published, Scenario Studio provides a clearly labeled simulated position book instead of pretending that empty arrays are live staking activity.",
-    }),
-    buildStakingSourceChips(stakingState, scenario, hydrationMode)
+    buildScenarioHeaderHTML(
+      "staking",
+      buildStakingSourceChips(stakingState, scenario, hydrationMode)
+    )
   );
 
   const amountEl = document.getElementById("sk-amount");

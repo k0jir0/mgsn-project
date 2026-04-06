@@ -278,6 +278,47 @@ export function buildScenarioStudioHTML({
     </section>`;
 }
 
+const SCENARIO_HEADER_CONTENT = Object.freeze({
+  dashboard: {
+    heading: "Dashboard Demo Controls",
+    description: "Scenario Studio persists across the whole site, so chart, strategy, buyback, staking, and burn assumptions stay in sync.",
+    note: "Use the showcase preset to demonstrate the full product loop, or keep live mode enabled to inspect current ICPSwap and ledger-backed data.",
+  },
+  strategy: {
+    heading: "Strategy Demo Controls",
+    description: "Keep live chart history, but synchronize the signal engine, LP assumptions, and portfolio defaults with the same shared scenario state used everywhere else.",
+    note: "Scenario Studio persists across the dashboard, strategy, buyback, staking, and burn pages so one showcase story stays internally consistent.",
+  },
+  buyback: {
+    heading: "Buyback Demo Controls",
+    description: "Use one shared showcase state to demonstrate launch-day buyback activity before the public vault address is published.",
+    note: "Live ICPSwap volume still powers the calculator whenever it is available. Demo mode only simulates the execution history and hero totals.",
+  },
+  staking: {
+    heading: "Staking Demo Controls",
+    description: "Switch between live reward assumptions and a simulated staking book so the lock-tier experience is fully demonstrable.",
+    note: "Until the public staking canister is published, Scenario Studio provides a clearly labeled simulated position book instead of pretending that empty arrays are live staking activity.",
+  },
+  burn: {
+    heading: "Burn Demo Controls",
+    description: "Keep the burn history live while synchronizing the burn simulator with the same cross-page scenario state.",
+    note: "The burn leaderboard and totals remain ledger-indexed. Scenario Studio only controls the calculator defaults and any optional price overrides.",
+  },
+});
+
+export function buildScenarioHeaderHTML(pageKey, statusHtml = "", overrides = {}) {
+  const content = {
+    ...(SCENARIO_HEADER_CONTENT[pageKey] ?? SCENARIO_HEADER_CONTENT.dashboard),
+    ...overrides,
+  };
+
+  return `
+    <section class="scenario-header" data-scenario-header="${pageKey}">
+      ${statusHtml}
+      ${buildScenarioStudioHTML(content)}
+    </section>`;
+}
+
 function collectScenarioState(root) {
   const next = { ...loadScenarioState() };
   root.querySelectorAll("[data-studio-field]").forEach((input) => {

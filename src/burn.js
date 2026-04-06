@@ -28,7 +28,7 @@ import {
   applyScenarioToPrices,
   attachScenarioStudio,
   buildBurnSourceChips,
-  buildScenarioStudioHTML,
+  buildScenarioHeaderHTML,
   getBurnScenarioAmount,
   loadScenarioState,
   readViewCache,
@@ -194,7 +194,7 @@ function renderImpactCalc(metrics, mgsnNow) {
 
 // ── HTML builder ──────────────────────────────────────────────────────────────
 
-function buildHTML(metrics, mgsnNow, studioHtml, statusHtml, scenarioAmount) {
+function buildHTML(metrics, mgsnNow, scenarioHeaderHtml, scenarioAmount) {
   const burnAddressReady = !!metrics.burnAddress;
   const burnAddressText = burnAddressReady ? metrics.burnAddress : "Unavailable";
   const totalBurnedDisplay = metrics.totalBurned > 0 ? compact(metrics.totalBurned) : "0";
@@ -278,8 +278,7 @@ function buildHTML(metrics, mgsnNow, studioHtml, statusHtml, scenarioAmount) {
     </header>
 
     <div class="br-page">
-      ${statusHtml}
-      ${studioHtml}
+      ${scenarioHeaderHtml}
 
       <!-- Hero -->
       <section class="br-hero">
@@ -710,12 +709,10 @@ function renderBurnPage(app, baseState, hydrationMode) {
   app.innerHTML = buildHTML(
     metrics,
     prices.mgsnUsd,
-    buildScenarioStudioHTML({
-      heading: "Burn Demo Controls",
-      description: "Keep the burn history live while synchronizing the burn simulator with the same cross-page scenario state.",
-      note: "The burn leaderboard and totals remain ledger-indexed. Scenario Studio only controls the calculator defaults and any optional price overrides.",
-    }),
-    buildBurnSourceChips(metrics, scenario, hydrationMode),
+    buildScenarioHeaderHTML(
+      "burn",
+      buildBurnSourceChips(metrics, scenario, hydrationMode)
+    ),
     scenarioAmount
   );
 
