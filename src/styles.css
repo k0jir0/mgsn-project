@@ -394,7 +394,7 @@ button, input, select { font: inherit; }
 }
 
 .main-header {
-  padding: 20px 28px 14px;
+  padding: 20px 28px 12px;
   position: sticky;
   top: var(--header-h);
   background: rgba(10,12,24,0.95);
@@ -433,6 +433,10 @@ button, input, select { font: inherit; }
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.chart-panels > .scenario-header {
+  scroll-margin-top: calc(var(--header-h) + 16px);
 }
 
 .chart-panel {
@@ -1013,7 +1017,7 @@ button, input, select { font: inherit; }
   }
 
   .chart-panels { padding: 12px 14px 0; }
-  .main-header  { padding: 14px 14px 10px; }
+  .main-header  { padding: 14px 14px 8px; }
 
   .chart-canvas-wrapper {
     height: 240px;

@@ -841,9 +841,9 @@ function buildMainHTML(dashboard, m, scenarioHeaderHtml) {
             <p class="main-subtitle">Interactive analysis with individual time controls • ${historySummary}</p>
           </div>
         </div>
-        ${scenarioHeaderHtml}
       </div>
       <div class="chart-panels">
+        ${scenarioHeaderHtml}
 
         ${reserveSection}
 
