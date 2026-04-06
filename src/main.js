@@ -168,6 +168,15 @@ function mkChart(id, config) {
   if (charts[id]) charts[id].destroy();
   const canvas = document.getElementById(`chart-${id}`);
   if (!canvas) return;
+  // Pre-size the canvas so Chart.js has a non-zero dimension reference
+  // even if ResizeObserver hasn't fired yet (common in overflow:auto parents)
+  const wrapper = canvas.parentElement;
+  if (wrapper) {
+    const w = wrapper.clientWidth  || wrapper.offsetWidth  || 800;
+    const h = wrapper.clientHeight || wrapper.offsetHeight || (id === 'reserve' ? 340 : 310);
+    canvas.width  = w;
+    canvas.height = h;
+  }
   charts[id] = new Chart(canvas, config);
 }
 
@@ -882,9 +891,9 @@ function render(app, dashboard) {
      </div>`;
   attachEvents(app, dashboard);
   updateSidebarPrices(m);
-  // setTimeout defers until after browser layout is fully committed,
-  // ensuring Chart.js can read non-zero canvas dimensions.
-  setTimeout(() => renderAllCharts(dashboard), 0);
+  // Double rAF: first frame commits layout, second reads it.
+  // This guarantees Chart.js reads non-zero canvas dimensions.
+  requestAnimationFrame(() => requestAnimationFrame(() => renderAllCharts(dashboard)));
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────

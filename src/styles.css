@@ -527,12 +527,16 @@ button, input, select { font: inherit; }
 
 .chart-canvas-wrapper {
   position: relative;
-  height: 310px;          /* explicit pixel height — Chart.js reads this */
+  height: 310px;
   margin: 8px 22px 0;
+  overflow: hidden;       /* required by Chart.js responsive mode */
 }
 
+/* canvas fills wrapper — Chart.js overrides width/height via JS */
 .chart-canvas-wrapper canvas {
-  display: block;         /* removes inline-block gap; Chart.js sets width/height */
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .chart-panel--reserve .chart-canvas-wrapper { height: 340px; }
@@ -783,6 +787,7 @@ button, input, select { font: inherit; }
   .chart-canvas-wrapper {
     height: 240px;
     margin: 6px 14px 0;
+    overflow: hidden;
   }
   .chart-panel--reserve .chart-canvas-wrapper { height: 260px; }
 
