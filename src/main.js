@@ -135,7 +135,7 @@ function baseOpts(yTickFmt = (v) => v) {
   return {
     responsive: false,
     maintainAspectRatio: false,
-    animation: { duration: 350 },
+    animation: false,   // draw synchronously — no requestAnimationFrame dependency
     interaction: { mode: "index", intersect: false },
     plugins: {
       legend: { display: false },
@@ -168,10 +168,6 @@ function mkChart(id, config) {
   if (charts[id]) charts[id].destroy();
   const canvas = document.getElementById(`chart-${id}`);
   if (!canvas) return;
-  // Use the canvas's own width/height attributes (set in HTML).
-  // With responsive:false, Chart.js reads these directly — no layout needed.
-  canvas.style.width  = canvas.width  + 'px';
-  canvas.style.height = canvas.height + 'px';
   charts[id] = new Chart(canvas, config);
 }
 
@@ -469,18 +465,53 @@ function renderRaisesChart(series) {
 
 function renderAllCharts(dashboard) {
   PANELS.forEach(({ id }) => {
-    const series = getSeries(dashboard.timeline, state.panelRanges[id]);
-    switch (id) {
-      case "reserve":     renderReserveChart(series); break;
-      case "sma":         renderSmaChart(series); break;
-      case "performance": renderPerformanceChart(series); break;
-      case "yield":       renderYieldChart(series); break;
-      case "satstoshare": renderSatsChart(series); break;
-      case "nav":         renderNavChart(series, dashboard); break;
-      case "cost":        renderCostChart(series); break;
-      case "volatility":  renderVolatilityChart(series); break;
-      case "volume":      renderVolumeChart(series); break;
-      case "raises":      renderRaisesChart(series); break;
+    const canvas = document.getElementById(`chart-${id}`);
+    if (!canvas) return;
+
+    // Measure the actual rendered panel width — forces a synchronous reflow
+    // so we get real pixels even on first render.
+    const panel  = document.getElementById(`panel-${id}`);
+    const w      = panel ? Math.max(panel.clientWidth - 44, 300) : 800;
+    const h      = id === 'reserve' ? 340 : 310;
+    canvas.width        = w;
+    canvas.height       = h;
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
+
+    try {
+      const series = getSeries(dashboard.timeline, state.panelRanges[id]);
+      switch (id) {
+        case "reserve":     renderReserveChart(series); break;
+        case "sma":         renderSmaChart(series); break;
+        case "performance": renderPerformanceChart(series); break;
+        case "yield":       renderYieldChart(series); break;
+        case "satstoshare": renderSatsChart(series); break;
+        case "nav":         renderNavChart(series, dashboard); break;
+        case "cost":        renderCostChart(series); break;
+        case "volatility":  renderVolatilityChart(series); break;
+        case "volume":      renderVolumeChart(series); break;
+        case "raises":      renderRaisesChart(series); break;
+      }
+    } catch (e) {
+      // Draw the error directly on the canvas so it's visible without DevTools
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 13px monospace';
+        ctx.fillText(`[${id}] Chart error:`, 12, 28);
+        ctx.font = '12px monospace';
+        // Word-wrap the error message across multiple lines
+        const words = String(e).split(' ');
+        let line = ''; let y = 50;
+        for (const word of words) {
+          const test = line ? line + ' ' + word : word;
+          if (ctx.measureText(test).width > w - 24) { ctx.fillText(line, 12, y); line = word; y += 18; }
+          else { line = test; }
+        }
+        if (line) ctx.fillText(line, 12, y);
+      }
     }
   });
 }
