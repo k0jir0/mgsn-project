@@ -34,6 +34,7 @@ if ("serviceWorker" in navigator) {
 
 import { demoDashboard } from "./demoData";
 import { fetchDashboardData } from "./liveData";
+import { buildPlatformHeaderHTML } from "./siteChrome.js";
 import {
   applyScenarioToDashboard,
   attachScenarioStudio,
@@ -663,40 +664,6 @@ function panelStatsFooter(chips) {
     </div>`;
 }
 
-// ── Top Header ────────────────────────────────────────────────────────────────
-
-function buildTopHeaderHTML(m) {
-  const icpVal = m.icpLive ? `$${m.icpLive.toFixed(2)}` : "—";
-  const icpCls = state.liveIcpUsd ? "live" : "";
-  return `
-    <header class="top-header">
-      <div class="top-header-logo">
-        <div class="logo-icon">M</div>
-        <div>
-          <div class="logo-title">MGSN Strategy Tracker</div>
-          <div class="logo-subtitle">on Internet Computer</div>
-        </div>
-      </div>
-      <nav class="s-nav" style="margin-left:20px;display:flex;align-items:center;gap:2px">
-        <a style="padding:5px 10px;border-radius:7px;font-size:0.76rem;font-weight:500;color:var(--mgsn);background:rgba(249,115,22,0.1);text-decoration:none;font-family:'IBM Plex Mono',monospace;letter-spacing:0.03em" href="/">Dashboard</a>
-        <a style="padding:5px 10px;border-radius:7px;font-size:0.76rem;font-weight:500;color:var(--muted);text-decoration:none;font-family:'IBM Plex Mono',monospace;letter-spacing:0.03em;transition:background 120ms,color 120ms" href="/strategy.html">Strategy</a>
-        <a style="padding:5px 10px;border-radius:7px;font-size:0.76rem;font-weight:500;color:var(--muted);text-decoration:none;font-family:'IBM Plex Mono',monospace;letter-spacing:0.03em;transition:background 120ms,color 120ms" href="/buyback.html">Buyback</a>
-        <a style="padding:5px 10px;border-radius:7px;font-size:0.76rem;font-weight:500;color:var(--muted);text-decoration:none;font-family:'IBM Plex Mono',monospace;letter-spacing:0.03em;transition:background 120ms,color 120ms" href="/staking.html">Staking</a>
-        <a style="padding:5px 10px;border-radius:7px;font-size:0.76rem;font-weight:500;color:var(--muted);text-decoration:none;font-family:'IBM Plex Mono',monospace;letter-spacing:0.03em;transition:background 120ms,color 120ms" href="/burn.html">Burn</a>
-      </nav>
-      <div class="top-header-spacer"></div>
-      <div class="top-header-badge">
-        <div class="live-dot"></div>
-        <span class="badge-text">Real-time analytics</span>
-      </div>
-      <div class="top-header-icp">
-        <span class="header-price-label">ICP/USD</span>
-        <span class="header-price-val ${icpCls}" id="icp-price-val">${icpVal}</span>
-      </div>
-      <button class="header-mobile-btn" id="mobile-menu-btn">☰ Charts</button>
-    </header>`;
-}
-
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 function buildSidebarHTML(dashboard) {
@@ -1035,7 +1002,15 @@ function render(app, dashboard, hydrationMode = "live") {
   const m = computeMetrics(displayDashboard);
   state.liveIcpUsd = m.icpLive ?? state.liveIcpUsd;
   app.innerHTML =
-    buildTopHeaderHTML(m) +
+    buildPlatformHeaderHTML({
+      activePage: "dashboard",
+      badgeText: "Real-time analytics",
+      priceLabel: "ICP/USD",
+      priceValue: m.icpLive ? `$${m.icpLive.toFixed(2)}` : "—",
+      priceId: "icp-price-val",
+      priceClass: state.liveIcpUsd ? "live" : "",
+      mobileActions: [{ id: "mobile-menu-btn", label: "Charts", ariaExpanded: false }],
+    }) +
     `<div class="page-body">
        ${buildSidebarHTML(displayDashboard)}
        ${buildMainHTML(

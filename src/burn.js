@@ -24,6 +24,7 @@ Chart.register({
 import { demoDashboard, BURN_PROGRAM, TOKEN_CANISTERS } from "./demoData";
 import { fetchICPSwapPrices } from "./liveData";
 import { fetchBurnProgramData } from "./onChainData.js";
+import { buildMobilePlatformNavHTML } from "./siteChrome.js";
 import {
   applyScenarioToPrices,
   attachScenarioStudio,
@@ -276,6 +277,7 @@ function buildHTML(metrics, mgsnNow, scenarioHeaderHtml, scenarioAmount) {
         <span class="header-price-val" id="br-mgsn-price">${mgsnNow ? fmt(mgsnNow, 7) : "—"}</span>
       </div>
     </header>
+    ${buildMobilePlatformNavHTML("burn")}
 
     <div class="br-page">
       ${scenarioHeaderHtml}
@@ -647,9 +649,14 @@ const BURN_CSS = `
   .br-calc-grid, .br-milestones-layout { grid-template-columns: 1fr; }
   .br-hero { flex-direction: column; gap: 20px; }
   .br-cta-card { max-width: 100%; }
+  .sk-nav { display: none; }
 }
 @media (max-width: 600px) {
-  .sk-nav { display: none; }
+  .br-calc-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
 }
 `;
 

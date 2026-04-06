@@ -24,6 +24,7 @@ Chart.register({
 import { demoDashboard, BUYBACK_PROGRAM, TOKEN_CANISTERS } from "./demoData";
 import { fetchLiveSpotPrices, fetchICPSwapPrices, fetchICPSwapPoolStats } from "./liveData";
 import { fetchBuybackProgramData } from "./onChainData.js";
+import { buildMobilePlatformNavHTML } from "./siteChrome.js";
 import {
   applyScenarioToPoolStats,
   applyScenarioToPrices,
@@ -220,6 +221,7 @@ function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, to
         <span class="header-price-val" id="bb-mgsn-price">${mgsnNow ? fmt(mgsnNow, 7) : "—"}</span>
       </div>
     </header>
+    ${buildMobilePlatformNavHTML("buyback")}
 
     <div class="bb-page">
       ${scenarioHeaderHtml}
@@ -461,6 +463,7 @@ const BUYBACK_CSS = `
 .bb-empty { font-size: 0.84rem; color: var(--ink2); font-family: "IBM Plex Mono", monospace; padding: 16px 0; }
 .bb-log-header { display: grid; grid-template-columns: 6rem 5rem 7rem 1fr 3.5rem; gap: 8px; padding: 6px 10px; background: var(--surface); border-radius: var(--radius-sm); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-family: "IBM Plex Mono", monospace; margin-bottom: 4px; }
 .bb-log-row { display: grid; grid-template-columns: 6rem 5rem 7rem 1fr 3.5rem; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 0.74rem; font-family: "IBM Plex Mono", monospace; align-items: center; }
+.bb-log-row > * { min-width: 0; }
 .bb-log-date { color: var(--muted); }
 .bb-log-usd { color: var(--positive); font-weight: 600; }
 .bb-log-tokens { color: var(--mgsn); font-weight: 600; }
@@ -481,9 +484,52 @@ const BUYBACK_CSS = `
   .bb-page { padding-left: 14px; padding-right: 14px; }
   .bb-calc-grid { grid-template-columns: 1fr; }
   .bb-hero { flex-direction: column; gap: 20px; }
+  .bb-nav { display: none; }
+}
+@media (max-width: 700px) {
+  .bb-log-header { display: none; }
+  .bb-log-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+    padding: 12px 0;
+  }
+  .bb-log-row > * {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .bb-log-date::before,
+  .bb-log-usd::before,
+  .bb-log-tokens::before,
+  .bb-log-note::before,
+  .bb-log-tx::before,
+  .bb-log-tx--na::before {
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: "IBM Plex Mono", monospace;
+  }
+  .bb-log-date::before { content: "Date"; }
+  .bb-log-usd::before { content: "USD"; }
+  .bb-log-tokens::before { content: "MGSN"; }
+  .bb-log-note::before { content: "Note"; }
+  .bb-log-tx::before,
+  .bb-log-tx--na::before { content: "TX"; }
+  .bb-log-note {
+    grid-column: 1 / -1;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+  }
 }
 @media (max-width: 600px) {
-  .bb-nav { display: none; }
+  .bb-calc-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
 }
 `;
 

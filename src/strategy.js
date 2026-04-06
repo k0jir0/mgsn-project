@@ -28,6 +28,7 @@ import {
   fetchICPSwapPrices,
   fetchICPSwapPoolStats,
 } from "./liveData";
+import { buildPlatformHeaderHTML } from "./siteChrome.js";
 import {
   applyScenarioToDashboard,
   applyScenarioToPoolStats,
@@ -817,28 +818,14 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio, scenarioHeade
     <p class="s-section-sub">Enter your MGSN holdings below to see P&L and price targets.</p>`;
 
   return `
-    <header class="top-header">
-      <div class="top-header-logo">
-        <div class="logo-icon">M</div>
-        <div>
-          <div class="logo-title">MGSN Strategy Tracker</div>
-          <div class="logo-subtitle">on Internet Computer</div>
-        </div>
-      </div>
-      <nav class="s-nav">
-        <a class="s-nav-link" href="/">Dashboard</a>
-        <a class="s-nav-link active" href="/strategy.html">Strategy</a>
-        <a class="s-nav-link" href="/buyback.html">Buyback</a>
-        <a class="s-nav-link" href="/staking.html">Staking</a>
-        <a class="s-nav-link" href="/burn.html">Burn</a>
-      </nav>
-      <div class="top-header-spacer"></div>
-      <div class="top-header-badge"><div class="live-dot"></div><span class="badge-text">Live signals</span></div>
-      <div class="top-header-icp">
-        <span class="header-price-label">ICP/USD</span>
-        <span class="header-price-val ${icpCls}" id="s-icp-price">${icpVal}</span>
-      </div>
-    </header>
+    ${buildPlatformHeaderHTML({
+      activePage: "strategy",
+      badgeText: "Live signals",
+      priceLabel: "ICP/USD",
+      priceValue: icpVal,
+      priceId: "s-icp-price",
+      priceClass: icpCls,
+    })}
 
     <div class="s-page">
       ${scenarioHeaderHtml}
@@ -1533,4 +1520,3 @@ function renderStrategyPage(app, baseState, hydrationMode) {
     if (el) el.textContent = fmt(prices.bobUsd, 4);
   }
 }
-

@@ -28,6 +28,7 @@ import {
 } from "./demoData";
 import { fetchLiveSpotPrices, fetchICPSwapPrices, fetchICPSwapPoolStats } from "./liveData";
 import { fetchStakingProgramData } from "./onChainData.js";
+import { buildMobilePlatformNavHTML } from "./siteChrome.js";
 import {
   applyScenarioToPoolStats,
   applyScenarioToPrices,
@@ -307,6 +308,7 @@ function buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState, scenar
         <span class="header-price-val" id="sk-mgsn-price">${mgsnNow ? fmt(mgsnNow, 7) : "—"}</span>
       </div>
     </header>
+    ${buildMobilePlatformNavHTML("staking")}
 
     <div class="sk-page">
       ${scenarioHeaderHtml}
@@ -718,9 +720,21 @@ const STAKING_CSS = `
   .sk-hero { flex-direction: column; gap: 20px; }
   .sk-combined-grid { flex-direction: column; }
   .sk-combined-divider, .sk-combined-equals { display: none; }
+  .sk-nav { display: none; }
 }
 @media (max-width: 600px) {
-  .sk-nav { display: none; }
+  .sk-calc-row,
+  .sk-supply-row {
+    gap: 6px;
+  }
+  .sk-calc-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+@media (max-width: 480px) {
+  .sk-tier-grid { grid-template-columns: 1fr; }
+  .sk-supply-row { grid-template-columns: 1fr; }
 }
 `;
 
