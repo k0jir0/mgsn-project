@@ -463,57 +463,84 @@ function renderRaisesChart(series) {
 
 // ── Render all charts ─────────────────────────────────────────────────────────
 
+// ── DEBUG: Pure Canvas 2D placeholder — no Chart.js, no library dependencies.
+// Draws bright colored bars directly. If these appear on screen, canvases are
+// accessible and visible. If they don't appear, the issue is CSS/DOM.
+// Replace this function with the real Chart.js version once confirmed working.
 function renderAllCharts(dashboard) {
+  const log = [];   // diagnostic — appended to debug overlay
+
   PANELS.forEach(({ id }) => {
     const canvas = document.getElementById(`chart-${id}`);
-    if (!canvas) return;
+    if (!canvas) { log.push(`${id}: canvas NOT FOUND`); return; }
 
-    // Measure the actual rendered panel width — forces a synchronous reflow
-    // so we get real pixels even on first render.
-    const panel  = document.getElementById(`panel-${id}`);
-    const w      = panel ? Math.max(panel.clientWidth - 44, 300) : 800;
-    const h      = id === 'reserve' ? 340 : 310;
+    const panel = document.getElementById(`panel-${id}`);
+    const w     = panel ? Math.max(panel.clientWidth - 44, 300) : 800;
+    const h     = id === 'reserve' ? 340 : 310;
+
     canvas.width        = w;
     canvas.height       = h;
     canvas.style.width  = w + 'px';
     canvas.style.height = h + 'px';
+    canvas.style.display = 'block';
 
-    try {
-      const series = getSeries(dashboard.timeline, state.panelRanges[id]);
-      switch (id) {
-        case "reserve":     renderReserveChart(series); break;
-        case "sma":         renderSmaChart(series); break;
-        case "performance": renderPerformanceChart(series); break;
-        case "yield":       renderYieldChart(series); break;
-        case "satstoshare": renderSatsChart(series); break;
-        case "nav":         renderNavChart(series, dashboard); break;
-        case "cost":        renderCostChart(series); break;
-        case "volatility":  renderVolatilityChart(series); break;
-        case "volume":      renderVolumeChart(series); break;
-        case "raises":      renderRaisesChart(series); break;
-      }
-    } catch (e) {
-      // Draw the error directly on the canvas so it's visible without DevTools
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(0, 0, w, h);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 13px monospace';
-        ctx.fillText(`[${id}] Chart error:`, 12, 28);
-        ctx.font = '12px monospace';
-        // Word-wrap the error message across multiple lines
-        const words = String(e).split(' ');
-        let line = ''; let y = 50;
-        for (const word of words) {
-          const test = line ? line + ' ' + word : word;
-          if (ctx.measureText(test).width > w - 24) { ctx.fillText(line, 12, y); line = word; y += 18; }
-          else { line = test; }
-        }
-        if (line) ctx.fillText(line, 12, y);
-      }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { log.push(`${id}: getContext returned null`); return; }
+
+    // ── Draw placeholder directly — zero library dependencies
+    const series = getSeries(dashboard.timeline, state.panelRanges[id]);
+    const values = series.map((p) => {
+      if (id === 'volume')  return p.bobVolume;
+      if (id === 'raises')  return p.bobVolume;
+      if (id === 'yield')   return p.mgsnPrice * 77_000_000;
+      return p.mgsnPrice;
+    });
+    const max = Math.max(...values) || 1;
+
+    // Background
+    ctx.fillStyle = '#0f1120';
+    ctx.fillRect(0, 0, w, h);
+
+    // Grid lines
+    ctx.strokeStyle = '#1a1f3a';
+    ctx.lineWidth   = 1;
+    for (let i = 1; i < 4; i++) {
+      const y = Math.round((h - 30) * (1 - i / 4)) + 10;
+      ctx.beginPath(); ctx.moveTo(30, y); ctx.lineTo(w - 10, y); ctx.stroke();
     }
+
+    // Bars
+    const n    = values.length;
+    const barW = Math.max(2, Math.floor((w - 40) / n) - 2);
+    values.forEach((v, i) => {
+      const barH = Math.max(2, Math.round(((h - 40) * v) / max));
+      const x    = 30 + i * Math.floor((w - 40) / n);
+      const alpha = 0.5 + 0.5 * (i / n);
+      ctx.fillStyle = `rgba(249,115,22,${alpha})`;
+      ctx.fillRect(x, h - 30 - barH, barW, barH);
+    });
+
+    // Label
+    ctx.fillStyle = '#f97316';
+    ctx.font      = 'bold 12px monospace';
+    ctx.fillText(id, 12, 22);
+    ctx.fillStyle = '#5a6a8a';
+    ctx.font      = '11px monospace';
+    ctx.fillText(`${n} pts  max=${max.toFixed(4)}`, 12, h - 8);
+
+    log.push(`${id}: OK ${w}×${h}`);
   });
+
+  // ── Small fixed debug overlay (top-right) showing per-panel status
+  const existing = document.getElementById('_dbg');
+  if (existing) existing.remove();
+  const dbg = document.createElement('pre');
+  dbg.id = '_dbg';
+  dbg.style.cssText = 'position:fixed;top:60px;right:0;z-index:9999;background:#000;' +
+    'color:#0f0;padding:8px 10px;font:11px monospace;line-height:1.5;' +
+    'border-left:2px solid #333;max-height:80vh;overflow-y:auto;pointer-events:none';
+  dbg.textContent = 'renderAllCharts\n' + log.join('\n');
+  document.body.appendChild(dbg);
 }
 
 // ── Compute latest-point metrics ──────────────────────────────────────────────
