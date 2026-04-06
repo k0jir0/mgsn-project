@@ -90,6 +90,7 @@ const state = {
   panelRanges: Object.fromEntries(PANELS.map((p) => [p.id, "all"])),
   visible:     new Set(PANELS.map((p) => p.id)),
   liveIcpUsd:  null,
+  mobileUiCleanup: null,
 };
 
 const charts = {};
@@ -910,6 +911,9 @@ function buildMainHTML(dashboard, m, studioHtml, statusHtml) {
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function attachEvents(app, dashboard) {
+  state.mobileUiCleanup?.();
+  state.mobileUiCleanup = null;
+
   // Sidebar panel toggles
   app.querySelectorAll(".toggle-item input[type=checkbox]").forEach((cb) => {
     cb.addEventListener("change", () => {
@@ -965,14 +969,50 @@ function attachEvents(app, dashboard) {
   // Mobile sidebar toggle
   const sidebar  = app.querySelector("#sidebar");
   const backdrop = app.querySelector("#sidebar-backdrop");
-  app.querySelector("#mobile-menu-btn")?.addEventListener("click", () => {
-    sidebar.classList.toggle("open");
-    backdrop.classList.toggle("open");
+
+  const setSidebarOpen = (open) => {
+    if (!sidebar || !backdrop) return;
+    sidebar.classList.toggle("open", open);
+    backdrop.classList.toggle("open", open);
+    document.body.classList.toggle("sidebar-open", open);
+    mobileBtn?.setAttribute("aria-expanded", String(open));
+  };
+
+  const closeSidebar = () => {
+    setSidebarOpen(false);
+  };
+
+  const mobileBtn = app.querySelector("#mobile-menu-btn");
+  mobileBtn?.setAttribute("aria-expanded", "false");
+  mobileBtn?.addEventListener("click", () => {
+    const nextOpen = !sidebar?.classList.contains("open");
+    setSidebarOpen(nextOpen);
   });
-  backdrop?.addEventListener("click", () => {
+
+  backdrop?.addEventListener("click", closeSidebar);
+
+  const handleKeydown = (event) => {
+    if (event.key === "Escape") {
+      closeSidebar();
+    }
+  };
+
+  const handleResize = () => {
+    if (window.innerWidth > 900) {
+      closeSidebar();
+    }
+  };
+
+  window.addEventListener("keydown", handleKeydown);
+  window.addEventListener("resize", handleResize);
+
+  state.mobileUiCleanup = () => {
     sidebar.classList.remove("open");
     backdrop.classList.remove("open");
-  });
+    document.body.classList.remove("sidebar-open");
+    window.removeEventListener("keydown", handleKeydown);
+    window.removeEventListener("resize", handleResize);
+  };
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -989,6 +1029,8 @@ function updateSidebarPrices(m) {
 }
 
 function render(app, dashboard, hydrationMode = "live") {
+  state.mobileUiCleanup?.();
+  state.mobileUiCleanup = null;
   const scenario = loadScenarioState();
   const displayDashboard = applyScenarioToDashboard(dashboard, scenario);
   const m = computeMetrics(displayDashboard);

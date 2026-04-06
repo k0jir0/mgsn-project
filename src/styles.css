@@ -40,6 +40,11 @@ html, body {
   height: 100%;
 }
 
+html {
+  overflow-y: auto;
+  scroll-padding-top: calc(var(--header-h) + 18px);
+}
+
 body {
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   color: var(--ink);
@@ -181,8 +186,8 @@ button, input, select { font: inherit; }
 
 .page-body {
   display: flex;
-  height: 100vh;
-  overflow: hidden;           /* forces eager layout computation, needed for Chart.js */
+  align-items: flex-start;
+  min-height: calc(100dvh - var(--header-h));
   padding-top: var(--header-h);
 }
 
@@ -195,11 +200,16 @@ button, input, select { font: inherit; }
   border-right: 1px solid var(--panel-border);
   display: flex;
   flex-direction: column;
+  position: sticky;
+  top: var(--header-h);
+  align-self: flex-start;
+  max-height: calc(100dvh - var(--header-h));
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
-  height: 100%;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .sidebar-logo {
@@ -377,10 +387,8 @@ button, input, select { font: inherit; }
 
 .main-content {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  min-width: 0;
+  overflow: visible;
   background: var(--bg);
   padding-bottom: 80px;
 }
@@ -388,7 +396,7 @@ button, input, select { font: inherit; }
 .main-header {
   padding: 20px 28px 14px;
   position: sticky;
-  top: 0;
+  top: var(--header-h);
   background: rgba(10,12,24,0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -931,7 +939,7 @@ button, input, select { font: inherit; }
 .sidebar-backdrop {
   display: none;
   position: fixed;
-  inset: 0;
+  inset: var(--header-h) 0 0;
   background: rgba(0,0,0,0.6);
   z-index: 99;
 }
@@ -960,7 +968,12 @@ button, input, select { font: inherit; }
 /* -- Responsive ------------------------------------------- */
 
 @media (max-width: 900px) {
-  body { overflow: hidden; }
+  body.sidebar-open { overflow: hidden; }
+
+  .page-body {
+    display: block;
+    min-height: auto;
+  }
 
   .header-mobile-btn { display: flex; align-items: center; gap: 6px; }
 
@@ -969,6 +982,9 @@ button, input, select { font: inherit; }
     top: var(--header-h);
     left: 0;
     bottom: 0;
+    width: min(86vw, var(--sidebar-w));
+    min-width: min(86vw, var(--sidebar-w));
+    max-height: none;
     transform: translateX(-100%);
     transition: transform 240ms ease;
     z-index: 100;
@@ -976,7 +992,11 @@ button, input, select { font: inherit; }
   }
 
   .sidebar.open { transform: translateX(0); }
-  .sidebar-backdrop.open { display: block; top: var(--header-h); }
+  .sidebar-backdrop.open { display: block; }
+
+  .main-content {
+    padding-bottom: 56px;
+  }
 
   .chart-panels { padding: 12px 14px 0; }
   .main-header  { padding: 14px 14px 10px; }
