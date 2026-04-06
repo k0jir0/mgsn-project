@@ -906,10 +906,19 @@ async function bootstrap() {
       <span class="loading-text">Loading MGSN Strategy Tracker…</span>
     </div>`;
 
-  // Always use demoDashboard — the ICP canister's MetricPoint lacks icpPrice,
-  // which causes undefined.toFixed() and blocks chart rendering entirely.
-  // Actor integration will be re-wired once charts are confirmed working.
-  const dashboard = demoDashboard;
+  // Try the live canister first; fall back to demoDashboard if unavailable.
+  // MetricPoint now includes icpPrice so all derived metrics work correctly.
+  let dashboard = demoDashboard;
+  const actor = createBackendActor();
+  if (actor) {
+    try {
+      const live = await actor.getDashboard();
+      // Validate the first timeline entry has icpPrice before switching
+      if (live?.timeline?.length && live.timeline[0].icpPrice != null) {
+        dashboard = live;
+      }
+    } catch { /* canister unreachable — fall through to demoDashboard */ }
+  }
 
   try {
     render(app, dashboard);

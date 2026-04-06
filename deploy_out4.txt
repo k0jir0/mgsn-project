@@ -1,0 +1,23 @@
+﻿node.exe : Building canisters:
+At C:\Users\ryanv\AppData\Roaming\npm\icp.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/@icp-sdk/icp-cli/bin/icp.js" ...
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Building canisters::String) [], R 
+   emoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Creating canisters:
+All canisters already exist
+Setting environment variables:
+Installing canisters:
+ERR ----- Failed to install canister 'backend': yr6am-caaaa-aaaah-qugoa-cai 
+-----
+ERR 'agent error: The replica returned a rejection error: reject code 
+CanisterError, reject message Error from Canister yr6am-caaaa-aaaah-qugoa-cai: 
+Canister called `ic0.trap` with message: 'RTS error: Memory-incompatible 
+program upgrade'.
+Consider gracefully handling failures from this canister or altering the 
+canister to handle exceptions. See documentation: https://internetcomputer.org/
+docs/current/references/execution-errors#trapped-explicitly, error code 
+Some("IC0503")'
+Error: Canister(s) ["backend"] failed to install.

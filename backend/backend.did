@@ -11,6 +11,7 @@ type Dashboard = record {
 
 type MetricPoint = record {
   period : text;
+  icpPrice : float64;
   bobPrice : float64;
   mgsnPrice : float64;
   bobVolume : float64;
