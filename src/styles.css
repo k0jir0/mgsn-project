@@ -532,11 +532,9 @@ button, input, select { font: inherit; }
   overflow: hidden;       /* required by Chart.js responsive mode */
 }
 
-/* canvas fills wrapper — Chart.js overrides width/height via JS */
+/* Chart.js sets explicit px dimensions on the canvas — no CSS override */
 .chart-canvas-wrapper canvas {
   display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .chart-panel--reserve .chart-canvas-wrapper { height: 340px; }

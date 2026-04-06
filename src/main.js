@@ -133,7 +133,7 @@ function pctFmt(v, decimals = 1) {
 
 function baseOpts(yTickFmt = (v) => v) {
   return {
-    responsive: true,
+    responsive: false,
     maintainAspectRatio: false,
     animation: { duration: 350 },
     interaction: { mode: "index", intersect: false },
@@ -168,14 +168,15 @@ function mkChart(id, config) {
   if (charts[id]) charts[id].destroy();
   const canvas = document.getElementById(`chart-${id}`);
   if (!canvas) return;
-  // Pre-size the canvas so Chart.js has a non-zero dimension reference
-  // even if ResizeObserver hasn't fired yet (common in overflow:auto parents)
   const wrapper = canvas.parentElement;
   if (wrapper) {
-    const w = wrapper.clientWidth  || wrapper.offsetWidth  || 800;
-    const h = wrapper.clientHeight || wrapper.offsetHeight || (id === 'reserve' ? 340 : 310);
-    canvas.width  = w;
-    canvas.height = h;
+    const rect = wrapper.getBoundingClientRect();
+    const w = Math.round(rect.width)  || wrapper.offsetWidth  || 800;
+    const h = Math.round(rect.height) || wrapper.offsetHeight || (id === 'reserve' ? 340 : 310);
+    canvas.width        = w;
+    canvas.height       = h;
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
   }
   charts[id] = new Chart(canvas, config);
 }
