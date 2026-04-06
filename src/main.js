@@ -168,16 +168,10 @@ function mkChart(id, config) {
   if (charts[id]) charts[id].destroy();
   const canvas = document.getElementById(`chart-${id}`);
   if (!canvas) return;
-  const wrapper = canvas.parentElement;
-  if (wrapper) {
-    const rect = wrapper.getBoundingClientRect();
-    const w = Math.round(rect.width)  || wrapper.offsetWidth  || 800;
-    const h = Math.round(rect.height) || wrapper.offsetHeight || (id === 'reserve' ? 340 : 310);
-    canvas.width        = w;
-    canvas.height       = h;
-    canvas.style.width  = w + 'px';
-    canvas.style.height = h + 'px';
-  }
+  // Use the canvas's own width/height attributes (set in HTML).
+  // With responsive:false, Chart.js reads these directly — no layout needed.
+  canvas.style.width  = canvas.width  + 'px';
+  canvas.style.height = canvas.height + 'px';
   charts[id] = new Chart(canvas, config);
 }
 
@@ -680,7 +674,7 @@ function buildMainHTML(dashboard, m) {
     <div class="chart-panel chart-panel--reserve${state.visible.has("reserve") ? "" : " hidden"}" id="panel-reserve" data-panel="reserve">
       ${panelHeader("Token Purchases", "Cumulative MGSN & BOB market capitalization", "reserve",
           ["Token Reserve", "Market Value"])}
-      <div class="chart-canvas-wrapper"><canvas id="chart-reserve"></canvas></div>
+      <div class="chart-canvas-wrapper"><canvas id="chart-reserve" width="800" height="340"></canvas></div>
       <p class="drag-hint">Drag the handles or selection area to zoom into different time periods</p>
       <div class="reserve-stats-row">
         <div class="reserve-main-stat">
@@ -715,7 +709,7 @@ function buildMainHTML(dashboard, m) {
     return `
       <div class="chart-panel${state.visible.has(id) ? "" : " hidden"}" id="panel-${id}" data-panel="${id}">
         ${panelHeader(titleArg, subtitle, id, tabPair)}
-        <div class="chart-canvas-wrapper"><canvas id="chart-${id}"></canvas></div>
+        <div class="chart-canvas-wrapper"><canvas id="chart-${id}" width="800" height="310"></canvas></div>
         ${chips.length ? panelStatsFooter(chips) : ""}
       </div>`;
   }
@@ -891,9 +885,10 @@ function render(app, dashboard) {
        ${buildMainHTML(dashboard, m)}
      </div>`;
   attachEvents(app, dashboard);
-  // Schedule charts FIRST — before any other work that might throw
-  setTimeout(() => renderAllCharts(dashboard), 0);
   updateSidebarPrices(m);
+  // Canvas elements are in the DOM with explicit width/height attributes.
+  // Call synchronously — no timing hacks needed.
+  renderAllCharts(dashboard);
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
