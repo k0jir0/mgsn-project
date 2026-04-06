@@ -28,6 +28,18 @@ import {
   fetchICPSwapPrices,
   fetchICPSwapPoolStats,
 } from "./liveData";
+import {
+  applyScenarioToDashboard,
+  applyScenarioToPoolStats,
+  applyScenarioToPrices,
+  attachScenarioStudio,
+  buildDashboardSourceChips,
+  buildScenarioStudioHTML,
+  getPortfolioDefaults,
+  loadScenarioState,
+  readViewCache,
+  writeViewCache,
+} from "./siteState.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -173,7 +185,7 @@ function kellyCriterion(wins, losses) {
   const q       = 1 - p;
   const fullKelly = (p * b - q) / b;
   const fraction  = Math.min(Math.max(fullKelly * 0.25, 0), 0.25); // quarter-Kelly
-  return { fraction, fullKelly, p, b, note: `Win rate ${(p * 100).toFixed(1)}% · Avg W/L ${b.toFixed(2)}x` };
+  return { fraction, fullKelly, p, b, note: `Win rate ${(p * 100).toFixed(1)}% | Avg W/L ${b.toFixed(2)}x` };
 }
 
 function fmt(v, d = 2) {
@@ -750,7 +762,7 @@ function dcaRow(label, val, cls = "") {
 
 // ── Main HTML builder ─────────────────────────────────────────────────────────
 
-function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio) {
+function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio, studioHtml, statusHtml) {
   const icpVal  = sig.icpNow ? `$${sig.icpNow.toFixed(2)}` : "—";
   const icpCls  = liveIcpUsd ? "live" : "";
   const compBar = Math.round(sig.composite);
@@ -829,6 +841,8 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio) {
     </header>
 
     <div class="s-page">
+      ${statusHtml}
+      ${studioHtml}
 
       <!-- Alert board -->
       <section class="s-section" style="padding-top:20px">
@@ -838,7 +852,7 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio) {
       <!-- Hero -->
       <section class="s-hero">
         <div class="s-hero-left">
-          <div class="s-hero-eyebrow">MGSN Autonomous Strategy Engine · 6-factor composite</div>
+          <div class="s-hero-eyebrow">MGSN Autonomous Strategy Engine | 6-factor composite</div>
           <div class="s-hero-signal ${sig.actionClass}">${sig.action}</div>
           <p class="s-hero-note">${sig.actionNote}</p>
           <div class="s-hero-meta">
@@ -924,9 +938,9 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio) {
         <div class="s-chart-panel">
           <div class="s-chart-wrap" style="height:300px"><canvas id="chart-backtest"></canvas></div>
           <div class="s-backtest-stats">
-            <div class="s-stat-group"><span class="s-stat-label">Signal DCA</span><span class="s-stat-val mgsn">${fmt(bt.signal.value)}</span><span class="s-stat-sub">${pctFmt(bt.signal.roi)} ROI · ${compactMoney(bt.signal.invested)} invested</span></div>
-            <div class="s-stat-group"><span class="s-stat-label">Flat DCA</span><span class="s-stat-val bob">${fmt(bt.flat.value)}</span><span class="s-stat-sub">${pctFmt(bt.flat.roi)} ROI · ${compactMoney(bt.flat.invested)} invested</span></div>
-            <div class="s-stat-group"><span class="s-stat-label">Lump Sum</span><span class="s-stat-val gold">${fmt(bt.lump.value)}</span><span class="s-stat-sub">${pctFmt(bt.lump.roi)} ROI · ${compactMoney(bt.lump.invested)} upfront</span></div>
+            <div class="s-stat-group"><span class="s-stat-label">Signal DCA</span><span class="s-stat-val mgsn">${fmt(bt.signal.value)}</span><span class="s-stat-sub">${pctFmt(bt.signal.roi)} ROI | ${compactMoney(bt.signal.invested)} invested</span></div>
+            <div class="s-stat-group"><span class="s-stat-label">Flat DCA</span><span class="s-stat-val bob">${fmt(bt.flat.value)}</span><span class="s-stat-sub">${pctFmt(bt.flat.roi)} ROI | ${compactMoney(bt.flat.invested)} invested</span></div>
+            <div class="s-stat-group"><span class="s-stat-label">Lump Sum</span><span class="s-stat-val gold">${fmt(bt.lump.value)}</span><span class="s-stat-sub">${pctFmt(bt.lump.roi)} ROI | ${compactMoney(bt.lump.invested)} upfront</span></div>
             <div class="s-stat-group"><span class="s-stat-label">Projected MGSN</span><span class="s-stat-val">${fmt(bt.projectedNow, 7)}</span><span class="s-stat-sub">BOB-correlated price</span></div>
           </div>
         </div>
@@ -982,7 +996,7 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio) {
       <!-- LP yield + compound -->
       <section class="s-section">
         <h3 class="s-section-title">LP Yield Calculator + Compound Projector</h3>
-        <p class="s-section-sub">ICPSwap MGSN/ICP pool · 0.3% fee tier · fee income compounded monthly.</p>
+        <p class="s-section-sub">ICPSwap MGSN/ICP pool | 0.3% fee tier | fee income compounded monthly.</p>
         <div class="s-calc-grid">
           <div class="s-calc-card">
             <label class="s-input-label">Total Deposit Value (USD)</label>
@@ -1013,7 +1027,7 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio) {
 
       <div class="page-footer" style="padding:24px 0 60px">
         <p>Signals are informational only and do not constitute financial advice.</p>
-        <p style="margin-top:4px">Powered by <a href="https://icpswap.com" target="_blank" rel="noopener noreferrer">ICPSwap</a> · ICP/USD from <a href="https://coingecko.com" target="_blank" rel="noopener noreferrer">CoinGecko</a></p>
+        <p style="margin-top:4px">Powered by <a href="https://icpswap.com" target="_blank" rel="noopener noreferrer">ICPSwap</a> | ICP/USD from <a href="https://coingecko.com" target="_blank" rel="noopener noreferrer">CoinGecko</a></p>
       </div>
     </div>`;
 }
@@ -1335,121 +1349,43 @@ async function bootstrap() {
   document.head.appendChild(styleEl);
 
   const app = document.querySelector("#app");
-  app.innerHTML = `<div class="loading-screen"><div class="loading-logo">M</div><span class="loading-text">Computing strategy signals…</span></div>`;
+  const cachedState = readViewCache("strategy-page");
+  let baseState = buildStrategyBaseState(cachedState ?? {});
+  renderStrategyPage(app, baseState, cachedState ? "cached" : "fallback");
 
-  const dashboard = await fetchDashboardData() ?? demoDashboard;
-
-  // Fetch all live data in parallel
-  const [spotResult, icpswapResult, poolResult] = await Promise.allSettled([
+  const [liveDashboardResult, liveSpotResult, liveIcpswapResult, livePoolResult] = await Promise.allSettled([
+    fetchDashboardData(),
     fetchLiveSpotPrices(),
     fetchICPSwapPrices(),
     fetchICPSwapPoolStats(),
   ]);
 
-  const icpSpotLive = spotResult.value?.icpUsd != null;
-  liveIcpUsd    = spotResult.value?.icpUsd ?? dashboard.timeline.at(-1)?.icpPrice ?? null;
-  liveMgsnUsd   = icpswapResult.value?.mgsnUsd ?? dashboard.timeline.at(-1)?.mgsnPrice ?? null;
-  liveBobUsd    = icpswapResult.value?.bobUsd  ?? dashboard.timeline.at(-1)?.bobPrice ?? null;
-  livePoolStats = poolResult.value ?? {};
-
-  const sig  = computeSignals(dashboard, liveIcpUsd, liveMgsnUsd, liveBobUsd);
-  const bt   = runDCABacktest(dashboard, 100, liveMgsnUsd, liveBobUsd);
-  const lp   = estimateLPYield(sig.mgsnNow, sig.icpNow, 500, dashboard, livePoolStats);
-  const historicalMgsn = dashboard.timeline.at(-2)?.mgsnPrice ?? dashboard.timeline.at(-1).mgsnPrice;
-  const arb  = computeArbitrageScore(liveMgsnUsd, bt.projectedNow, historicalMgsn);
-
-  // Initial portfolio from default inputs
-  const defPort = computePortfolioPnl(1_000_000, 0.0000140, sig.mgsnNow, bt.projectedNow);
-  const alerts  = buildAlerts(sig, bt, defPort);
-
-  app.innerHTML = buildHTML(dashboard, sig, bt, lp, arb, alerts, defPort);
-
-  // Size and render charts
-  sizeCanvas("rsi",      chartW("rsi"),      200);
-  sizeCanvas("macd",     chartW("macd"),     200);
-  sizeCanvas("bb",       chartW("bb"),       200);
-  sizeCanvas("sma",      chartW("sma"),      200);
-  sizeCanvas("backtest", chartW("backtest"), 300);
-  sizeCanvas("compound", chartW("compound"), 200);
-
-  renderRsiChart(sig, dashboard.timeline);
-  renderMacdChart(sig, dashboard.timeline);
-  renderBollingerChart(sig, dashboard.timeline);
-  renderSmaSignalChart(sig, dashboard.timeline);
-  renderBacktestChart(bt);
-  renderCompoundChart(lp);
-
-  // Calc initial states
-  renderDCACalc(sig, dashboard);
-  renderLPCalc(sig, dashboard, livePoolStats);
-  renderPortfolioCalc(sig, bt);
-
-  // Wire inputs
-  ["dca-budget", "dca-strategy", "dca-scenario"].forEach((id) =>
-    document.getElementById(id)?.addEventListener("input", () => renderDCACalc(sig, dashboard)));
-  document.getElementById("lp-deposit")?.addEventListener("input", () => {
-    renderLPCalc(sig, dashboard, livePoolStats);
-    sizeCanvas("compound", chartW("compound"), 200);
-    renderCompoundChart(estimateLPYield(sig.mgsnNow, sig.icpNow,
-      parseFloat(document.getElementById("lp-deposit").value) || 500, dashboard, livePoolStats));
+  baseState = buildStrategyBaseState({
+    dashboard: liveDashboardResult.value ?? baseState.dashboard,
+    liveIcpUsd: liveSpotResult.value?.icpUsd ?? baseState.liveIcpUsd,
+    liveMgsnUsd: liveIcpswapResult.value?.mgsnUsd ?? baseState.liveMgsnUsd,
+    liveBobUsd: liveIcpswapResult.value?.bobUsd ?? baseState.liveBobUsd,
+    livePoolStats: livePoolResult.value ?? baseState.livePoolStats,
   });
-  ["port-holdings", "port-avgcost"].forEach((id) =>
-    document.getElementById(id)?.addEventListener("input", () => renderPortfolioCalc(sig, bt)));
+  writeViewCache("strategy-page", baseState);
+  renderStrategyPage(app, baseState, "live");
 
-  // Share signal button
-  document.getElementById("share-signal-btn")?.addEventListener("click", () => {
-    const shareText = `MGSN Signal: ${sig.action} (${sig.composite.toFixed(0)}/100) · Kelly: ${(sig.kelly.fraction * 100).toFixed(1)}% · MGSN: ${fmt(sig.mgsnNow, 7)} · ${new Date().toDateString()} · https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/strategy.html`;
-    navigator.clipboard.writeText(shareText).then(() => {
-      const btn = document.getElementById("share-signal-btn");
-      if (btn) { btn.textContent = "\u2713 Copied!"; setTimeout(() => { btn.innerHTML = "&#128203; Copy Signal"; }, 2000); }
-    });
-  });
-
-  // Update price display
-  if (liveIcpUsd) {
-    const el = document.getElementById("s-icp-price");
-    if (el) {
-      el.textContent = `$${liveIcpUsd.toFixed(2)}`;
-      el.classList.toggle("live", icpSpotLive);
-    }
-  }
-  if (liveMgsnUsd) {
-    const el = document.getElementById("s-mgsn-price");
-    if (el) el.textContent = fmt(liveMgsnUsd, 7);
-  }
-  if (liveBobUsd) {
-    const el = document.getElementById("s-bob-price");
-    if (el) el.textContent = fmt(liveBobUsd, 4);
-  }
-
-  // Poll every 60 s
   setInterval(async () => {
-    const [spot, icpswap, pool] = await Promise.allSettled([
-      fetchLiveSpotPrices(), fetchICPSwapPrices(), fetchICPSwapPoolStats(),
+    const [nextDashboardResult, nextSpotResult, nextIcpswapResult, nextPoolResult] = await Promise.allSettled([
+      fetchDashboardData(true),
+      fetchLiveSpotPrices(),
+      fetchICPSwapPrices(true),
+      fetchICPSwapPoolStats(true),
     ]);
-    const newIcp  = spot.value?.icpUsd        ?? liveIcpUsd;
-    const newMgsn = icpswap.value?.mgsnUsd    ?? liveMgsnUsd;
-    const newBob  = icpswap.value?.bobUsd     ?? liveBobUsd;
-    const newPool = pool.value               ?? livePoolStats;
-    liveIcpUsd = newIcp; liveMgsnUsd = newMgsn; liveBobUsd = newBob; livePoolStats = newPool;
-
-    if (newIcp) {
-      const el = document.getElementById("s-icp-price");
-      if (el) {
-        el.textContent = `$${newIcp.toFixed(2)}`;
-        el.classList.toggle("live", spot.value?.icpUsd != null);
-      }
-    }
-    if (newMgsn) {
-      const el = document.getElementById("s-mgsn-price");
-      if (el) el.textContent = fmt(newMgsn, 7);
-    }
-    if (newBob) {
-      const el = document.getElementById("s-bob-price");
-      if (el) el.textContent = fmt(newBob, 4);
-    }
-    // Re-render LP with fresh pool data
-    renderLPCalc(computeSignals(dashboard, newIcp, newMgsn, newBob), dashboard, newPool);
+    baseState = buildStrategyBaseState({
+      dashboard: nextDashboardResult.value ?? baseState.dashboard,
+      liveIcpUsd: nextSpotResult.value?.icpUsd ?? baseState.liveIcpUsd,
+      liveMgsnUsd: nextIcpswapResult.value?.mgsnUsd ?? baseState.liveMgsnUsd,
+      liveBobUsd: nextIcpswapResult.value?.bobUsd ?? baseState.liveBobUsd,
+      livePoolStats: nextPoolResult.value ?? baseState.livePoolStats,
+    });
+    writeViewCache("strategy-page", baseState);
+    renderStrategyPage(app, baseState, "live");
   }, 60_000);
 }
 
@@ -1474,4 +1410,131 @@ function renderSmaSignalChart(sig, timeline) {
 }
 
 bootstrap();
+
+function buildStrategyBaseState(raw = {}) {
+  return {
+    dashboard: raw.dashboard ?? demoDashboard,
+    liveIcpUsd: raw.liveIcpUsd ?? null,
+    liveMgsnUsd: raw.liveMgsnUsd ?? null,
+    liveBobUsd: raw.liveBobUsd ?? null,
+    livePoolStats: raw.livePoolStats ?? {},
+  };
+}
+
+function renderStrategyPage(app, baseState, hydrationMode) {
+  const scenario = loadScenarioState();
+  const dashboard = applyScenarioToDashboard(baseState.dashboard ?? demoDashboard, scenario);
+  const prices = applyScenarioToPrices(
+    {
+      icpUsd: baseState.liveIcpUsd ?? dashboard.timeline.at(-1)?.icpPrice ?? null,
+      mgsnUsd: baseState.liveMgsnUsd ?? dashboard.timeline.at(-1)?.mgsnPrice ?? null,
+      bobUsd: baseState.liveBobUsd ?? dashboard.timeline.at(-1)?.bobPrice ?? null,
+    },
+    scenario
+  );
+  const livePoolStatsLocal = applyScenarioToPoolStats(baseState.livePoolStats, scenario);
+
+  liveIcpUsd = prices.icpUsd;
+  liveMgsnUsd = prices.mgsnUsd;
+  liveBobUsd = prices.bobUsd;
+  livePoolStats = livePoolStatsLocal;
+
+  const sig = computeSignals(dashboard, prices.icpUsd, prices.mgsnUsd, prices.bobUsd);
+  const bt = runDCABacktest(dashboard, 100, prices.mgsnUsd, prices.bobUsd);
+  const lp = estimateLPYield(sig.mgsnNow, sig.icpNow, 500, dashboard, livePoolStatsLocal);
+  const historicalMgsn = dashboard.timeline.at(-2)?.mgsnPrice ?? dashboard.timeline.at(-1).mgsnPrice;
+  const arb = computeArbitrageScore(prices.mgsnUsd, bt.projectedNow, historicalMgsn);
+  const defaults = getPortfolioDefaults(scenario);
+  const defPort = computePortfolioPnl(defaults.holdings, defaults.avgCost, sig.mgsnNow, bt.projectedNow);
+  const alerts = buildAlerts(sig, bt, defPort);
+
+  app.innerHTML = buildHTML(
+    dashboard,
+    sig,
+    bt,
+    lp,
+    arb,
+    alerts,
+    defPort,
+    buildScenarioStudioHTML({
+      heading: "Strategy Demo Controls",
+      description: "Keep live chart history, but synchronize the signal engine, LP assumptions, and portfolio defaults with the same shared scenario state used everywhere else.",
+      note: "Scenario Studio persists across the dashboard, strategy, buyback, staking, and burn pages so one showcase story stays internally consistent.",
+    }),
+    buildDashboardSourceChips(dashboard, scenario, hydrationMode)
+  );
+
+  const holdingsEl = document.getElementById("port-holdings");
+  if (holdingsEl) holdingsEl.value = String(defaults.holdings);
+  const avgCostEl = document.getElementById("port-avgcost");
+  if (avgCostEl) avgCostEl.value = String(defaults.avgCost);
+
+  sizeCanvas("rsi", chartW("rsi"), 200);
+  sizeCanvas("macd", chartW("macd"), 200);
+  sizeCanvas("bb", chartW("bb"), 200);
+  sizeCanvas("sma", chartW("sma"), 200);
+  sizeCanvas("backtest", chartW("backtest"), 300);
+  sizeCanvas("compound", chartW("compound"), 200);
+
+  renderRsiChart(sig, dashboard.timeline);
+  renderMacdChart(sig, dashboard.timeline);
+  renderBollingerChart(sig, dashboard.timeline);
+  renderSmaSignalChart(sig, dashboard.timeline);
+  renderBacktestChart(bt);
+  renderCompoundChart(lp);
+
+  renderDCACalc(sig, dashboard);
+  renderLPCalc(sig, dashboard, livePoolStatsLocal);
+  renderPortfolioCalc(sig, bt);
+
+  ["dca-budget", "dca-strategy", "dca-scenario"].forEach((id) =>
+    document.getElementById(id)?.addEventListener("input", () => renderDCACalc(sig, dashboard)));
+  document.getElementById("lp-deposit")?.addEventListener("input", () => {
+    renderLPCalc(sig, dashboard, livePoolStatsLocal);
+    sizeCanvas("compound", chartW("compound"), 200);
+    renderCompoundChart(
+      estimateLPYield(
+        sig.mgsnNow,
+        sig.icpNow,
+        parseFloat(document.getElementById("lp-deposit").value) || 500,
+        dashboard,
+        livePoolStatsLocal
+      )
+    );
+  });
+  ["port-holdings", "port-avgcost"].forEach((id) =>
+    document.getElementById(id)?.addEventListener("input", () => renderPortfolioCalc(sig, bt)));
+
+  document.getElementById("share-signal-btn")?.addEventListener("click", () => {
+    const shareText = `MGSN Signal: ${sig.action} (${sig.composite.toFixed(0)}/100) | Kelly: ${(sig.kelly.fraction * 100).toFixed(1)}% | MGSN: ${fmt(sig.mgsnNow, 7)} | ${new Date().toDateString()} | https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/strategy.html`;
+    navigator.clipboard.writeText(shareText).then(() => {
+      const btn = document.getElementById("share-signal-btn");
+      if (btn) {
+        btn.textContent = "Copied!";
+        setTimeout(() => { btn.innerHTML = "&#128203; Copy Signal"; }, 2000);
+      }
+    });
+  });
+
+  attachScenarioStudio(app, () => {
+    renderStrategyPage(app, baseState, loadScenarioState().demoMode ? "demo" : hydrationMode);
+  });
+
+  if (prices.icpUsd) {
+    const el = document.getElementById("s-icp-price");
+    if (el) {
+      el.textContent = `$${prices.icpUsd.toFixed(2)}`;
+      el.classList.toggle("live", true);
+    }
+  }
+  if (prices.mgsnUsd) {
+    const el = document.getElementById("s-mgsn-price");
+    if (el) el.textContent = fmt(prices.mgsnUsd, 7);
+  }
+  if (prices.bobUsd) {
+    const el = document.getElementById("s-bob-price");
+    if (el) el.textContent = fmt(prices.bobUsd, 4);
+  }
+}
+
 

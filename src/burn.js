@@ -24,6 +24,16 @@ Chart.register({
 import { demoDashboard, BURN_PROGRAM, TOKEN_CANISTERS } from "./demoData";
 import { fetchICPSwapPrices } from "./liveData";
 import { fetchBurnProgramData } from "./onChainData.js";
+import {
+  applyScenarioToPrices,
+  attachScenarioStudio,
+  buildBurnSourceChips,
+  buildScenarioStudioHTML,
+  getBurnScenarioAmount,
+  loadScenarioState,
+  readViewCache,
+  writeViewCache,
+} from "./siteState.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -184,7 +194,7 @@ function renderImpactCalc(metrics, mgsnNow) {
 
 // ── HTML builder ──────────────────────────────────────────────────────────────
 
-function buildHTML(metrics, mgsnNow) {
+function buildHTML(metrics, mgsnNow, studioHtml, statusHtml, scenarioAmount) {
   const burnAddressReady = !!metrics.burnAddress;
   const burnAddressText = burnAddressReady ? metrics.burnAddress : "Unavailable";
   const totalBurnedDisplay = metrics.totalBurned > 0 ? compact(metrics.totalBurned) : "0";
@@ -268,6 +278,8 @@ function buildHTML(metrics, mgsnNow) {
     </header>
 
     <div class="br-page">
+      ${statusHtml}
+      ${studioHtml}
 
       <!-- Hero -->
       <section class="br-hero">
@@ -350,11 +362,11 @@ function buildHTML(metrics, mgsnNow) {
       <!-- Impact calculator -->
       <section class="br-section">
         <h2 class="br-section-title">Burn impact calculator</h2>
-        <p class="br-section-sub">See how burning a specific amount of MGSN affects total supply and estimated price trajectory.</p>
+        <p class="br-section-sub">See how burning a specific amount of MGSN affects total supply and modeled price trajectory. This is a scenario model, not an execution guarantee.</p>
         <div class="br-calc-grid">
           <div class="br-calc-card">
             <label class="br-input-label">MGSN to burn</label>
-            <input id="br-amount" type="number" class="br-input" value="100000" min="1" step="10000" />
+            <input id="br-amount" type="number" class="br-input" value="${Math.max(1, Math.round(scenarioAmount))}" min="1" step="10000" />
             <div id="br-calc-results" class="br-calc-results"></div>
           </div>
           <div class="br-calc-card">
@@ -650,14 +662,27 @@ async function bootstrap() {
   document.head.appendChild(styleEl);
 
   const app = document.querySelector("#app");
-  app.innerHTML = `<div class="loading-screen"><div class="loading-logo">M</div><span class="loading-text">Loading burn data…</span></div>`;
+  const cachedState = readViewCache("burn-page");
+  let baseState = buildBurnBaseState(cachedState ?? {});
+  renderBurnPage(app, baseState, cachedState ? "cached" : "fallback");
 
-  const [icpswapResult, burnResult] = await Promise.allSettled([
+  const [liveIcpswapResult, liveBurnResult] = await Promise.allSettled([
     fetchICPSwapPrices(),
     fetchBurnProgramData(),
   ]);
-  const mgsnNow = icpswapResult.value?.mgsnUsd ?? demoDashboard.timeline.at(-1).mgsnPrice;
-  const burnState = burnResult.value ?? {
+
+  baseState = buildBurnBaseState({
+    mgsnNow: liveIcpswapResult.value?.mgsnUsd ?? baseState.mgsnNow,
+    burnState: liveBurnResult.value ?? baseState.burnState,
+  });
+  writeViewCache("burn-page", baseState);
+  renderBurnPage(app, baseState, "live");
+}
+
+bootstrap();
+
+function fallbackBurnState() {
+  return {
     status: "unavailable",
     burnAddress: BURN_PROGRAM.burnAddress,
     burnAddressBalance: 0,
@@ -667,19 +692,38 @@ async function bootstrap() {
     log: [],
     note: "MGSN burn history is temporarily unavailable.",
   };
+}
 
-  const metrics = computeBurnMetrics(mgsnNow, burnState);
+function buildBurnBaseState(raw = {}) {
+  return {
+    mgsnNow: raw.mgsnNow ?? demoDashboard.timeline.at(-1).mgsnPrice,
+    burnState: raw.burnState ?? fallbackBurnState(),
+  };
+}
 
-  app.innerHTML = buildHTML(metrics, mgsnNow);
+function renderBurnPage(app, baseState, hydrationMode) {
+  const scenario = loadScenarioState();
+  const prices = applyScenarioToPrices({ mgsnUsd: baseState.mgsnNow }, scenario);
+  const metrics = computeBurnMetrics(prices.mgsnUsd, baseState.burnState ?? fallbackBurnState());
+  const scenarioAmount = getBurnScenarioAmount(scenario);
 
-  // Impact calculator
-  renderImpactCalc(metrics, mgsnNow);
-  document.getElementById("br-amount")?.addEventListener("input", () => renderImpactCalc(metrics, mgsnNow));
+  app.innerHTML = buildHTML(
+    metrics,
+    prices.mgsnUsd,
+    buildScenarioStudioHTML({
+      heading: "Burn Demo Controls",
+      description: "Keep the burn history live while synchronizing the burn simulator with the same cross-page scenario state.",
+      note: "The burn leaderboard and totals remain ledger-indexed. Scenario Studio only controls the calculator defaults and any optional price overrides.",
+    }),
+    buildBurnSourceChips(metrics, scenario, hydrationMode),
+    scenarioAmount
+  );
 
-  // Milestone chart
+  renderImpactCalc(metrics, prices.mgsnUsd);
+  document.getElementById("br-amount")?.addEventListener("input", () => renderImpactCalc(metrics, prices.mgsnUsd));
+
   renderMilestoneChart(metrics);
 
-  // Copy-to-clipboard buttons
   function setupCopyBtn(btnId, valId) {
     const btn = document.getElementById(btnId);
     const val = document.getElementById(valId);
@@ -691,17 +735,18 @@ async function bootstrap() {
       }).catch(() => {});
     });
   }
-  setupCopyBtn("br-copy-addr",   "br-burn-addr");
+  setupCopyBtn("br-copy-addr", "br-burn-addr");
   setupCopyBtn("br-copy-addr-2", "br-burn-addr-2");
 
-  // Update live price in header
+  attachScenarioStudio(app, () => {
+    renderBurnPage(app, baseState, loadScenarioState().demoMode ? "demo" : hydrationMode);
+  });
+
   const priceEl = document.getElementById("br-mgsn-price");
-  if (priceEl && mgsnNow) {
+  if (priceEl && prices.mgsnUsd) {
     priceEl.textContent = new Intl.NumberFormat("en-US", {
       style: "currency", currency: "USD",
       minimumFractionDigits: 7, maximumFractionDigits: 7,
-    }).format(mgsnNow);
+    }).format(prices.mgsnUsd);
   }
 }
-
-bootstrap();

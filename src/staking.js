@@ -28,6 +28,17 @@ import {
 } from "./demoData";
 import { fetchLiveSpotPrices, fetchICPSwapPrices, fetchICPSwapPoolStats } from "./liveData";
 import { fetchStakingProgramData } from "./onChainData.js";
+import {
+  applyScenarioToPoolStats,
+  applyScenarioToPrices,
+  attachScenarioStudio,
+  buildScenarioStudioHTML,
+  buildSimulatedStakingState,
+  buildStakingSourceChips,
+  loadScenarioState,
+  readViewCache,
+  writeViewCache,
+} from "./siteState.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -255,15 +266,19 @@ function tierCard(tier, metrics, livePoolStats, mgsnNow) {
 
 // ── HTML builder ──────────────────────────────────────────────────────────────
 
-function buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState) {
+function buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState, studioHtml, statusHtml) {
   const monthly    = monthlyRewardPool(livePoolStats);
   const hasRealVolume = livePoolStats?.mgsnVol30d != null || livePoolStats?.mgsnVol24h != null;
-  const liveTag    = hasRealVolume
-    ? `<span class="sk-live-tag">real ICPSwap volume</span>`
-    : `<span class="sk-live-tag sk-live-tag--est">estimated</span>`;
+  const liveTag    = stakingState?.status === "simulated"
+    ? `<span class="sk-live-tag sk-live-tag--demo">demo showcase</span>`
+    : hasRealVolume
+      ? `<span class="sk-live-tag">real ICPSwap volume</span>`
+      : `<span class="sk-live-tag sk-live-tag--est">estimated</span>`;
   const effectiveFloat = metrics.totalSupply - metrics.totalMgsn;
   const floatReduction  = metrics.pctSupply;
-  const statusBanner = stakingState?.status === "unconfigured"
+  const statusBanner = stakingState?.status === "simulated"
+    ? `Scenario Studio showcase is active. These staking positions are simulated so the full reward and lock-tier UX can be demonstrated before the public canister is published.`
+    : stakingState?.status === "unconfigured"
     ? `No public staking canister is configured yet. This page will switch from projected positions to real on-chain positions automatically once the contract is published.`
     : stakingState?.status === "pending_interface"
       ? `A staking canister ID is configured, but the public position interface still needs to be wired before lock tiers and unlock dates can be read here.`
@@ -294,6 +309,8 @@ function buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState) {
     </header>
 
     <div class="sk-page">
+      ${statusHtml}
+      ${studioHtml}
 
       <!-- Hero -->
       <section class="sk-hero">
@@ -605,6 +622,7 @@ const STAKING_CSS = `
 .sk-section-sub { font-size: 0.74rem; color: var(--muted); font-family: "IBM Plex Mono", monospace; margin: 0 0 14px; max-width: 720px; }
 .sk-live-tag { font-size: 0.62rem; padding: 2px 8px; border-radius: 4px; background: rgba(34,197,94,0.12); color: var(--positive); font-family: "IBM Plex Mono", monospace; margin-left: 4px; }
 .sk-live-tag--est { background: rgba(245,158,11,0.12); color: var(--gold); }
+.sk-live-tag--demo { background: rgba(249,115,22,0.12); color: var(--mgsn); }
 
 /* How-it-works */
 .sk-how-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px,1fr)); gap: 12px; margin-top:16px; }
@@ -715,19 +733,31 @@ async function bootstrap() {
   document.head.appendChild(styleEl);
 
   const app = document.querySelector("#app");
-  app.innerHTML = `<div class="loading-screen"><div class="loading-logo">M</div><span class="loading-text">Loading staking data…</span></div>`;
+  const cachedState = readViewCache("staking-page");
+  let baseState = buildStakingBaseState(cachedState ?? {});
+  renderStakingPage(app, baseState, cachedState ? "cached" : "fallback");
 
-  const [spotResult, icpswapResult, poolResult, stakingResult] = await Promise.allSettled([
+  const [liveSpotResult, liveIcpswapResult, livePoolResult, liveStakingResult] = await Promise.allSettled([
     fetchLiveSpotPrices(),
     fetchICPSwapPrices(),
     fetchICPSwapPoolStats(),
     fetchStakingProgramData(),
   ]);
 
-  const mgsnNow       = icpswapResult.value?.mgsnUsd     ?? demoDashboard.timeline.at(-1).mgsnPrice;
-  const icpNow        = spotResult.value?.icpUsd         ?? demoDashboard.timeline.at(-1).icpPrice;
-  const livePoolStats = poolResult.value ?? {};
-  const stakingState  = stakingResult.value ?? {
+  baseState = buildStakingBaseState({
+    mgsnNow: liveIcpswapResult.value?.mgsnUsd ?? baseState.mgsnNow,
+    icpNow: liveSpotResult.value?.icpUsd ?? baseState.icpNow,
+    livePoolStats: livePoolResult.value ?? baseState.livePoolStats,
+    stakingState: liveStakingResult.value ?? baseState.stakingState,
+  });
+  writeViewCache("staking-page", baseState);
+  renderStakingPage(app, baseState, "live");
+}
+
+bootstrap();
+
+function fallbackStakingState() {
+  return {
     status: "unconfigured",
     currentSupply: demoDashboard.mgsnSupply,
     positions: [],
@@ -735,21 +765,60 @@ async function bootstrap() {
     totalWeight: 0,
     note: "No public staking canister is configured yet.",
   };
-
-  const metrics = computeStakingMetrics(mgsnNow, stakingState);
-
-  app.innerHTML = buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState);
-
-  renderCalc(metrics, livePoolStats, mgsnNow);
-  renderSupplyChart(metrics.pctSupply);
-
-  document.getElementById("sk-amount")?.addEventListener("input", () => renderCalc(metrics, livePoolStats, mgsnNow));
-  document.getElementById("sk-tier")?.addEventListener("change", () => renderCalc(metrics, livePoolStats, mgsnNow));
-
-  if (mgsnNow) {
-    const el = document.getElementById("sk-mgsn-price");
-    if (el) el.textContent = fmt(mgsnNow, 7);
-  }
 }
 
-bootstrap();
+function buildStakingBaseState(raw = {}) {
+  return {
+    mgsnNow: raw.mgsnNow ?? demoDashboard.timeline.at(-1).mgsnPrice,
+    icpNow: raw.icpNow ?? demoDashboard.timeline.at(-1).icpPrice,
+    livePoolStats: raw.livePoolStats ?? {},
+    stakingState: raw.stakingState ?? fallbackStakingState(),
+  };
+}
+
+function renderStakingPage(app, baseState, hydrationMode) {
+  const scenario = loadScenarioState();
+  const prices = applyScenarioToPrices(
+    { mgsnUsd: baseState.mgsnNow, icpUsd: baseState.icpNow },
+    scenario
+  );
+  const livePoolStats = applyScenarioToPoolStats(baseState.livePoolStats, scenario);
+  const simulatedState = buildSimulatedStakingState(
+    baseState.stakingState?.currentSupply ?? demoDashboard.mgsnSupply,
+    scenario
+  );
+  const stakingState = simulatedState ?? baseState.stakingState ?? fallbackStakingState();
+  const metrics = computeStakingMetrics(prices.mgsnUsd, stakingState);
+
+  app.innerHTML = buildHTML(
+    metrics,
+    livePoolStats,
+    prices.mgsnUsd,
+    prices.icpUsd,
+    stakingState,
+    buildScenarioStudioHTML({
+      heading: "Staking Demo Controls",
+      description: "Switch between live reward assumptions and a simulated staking book so the lock-tier experience is fully demonstrable.",
+      note: "Until the public staking canister is published, Scenario Studio provides a clearly labeled simulated position book instead of pretending that empty arrays are live staking activity.",
+    }),
+    buildStakingSourceChips(stakingState, scenario, hydrationMode)
+  );
+
+  const amountEl = document.getElementById("sk-amount");
+  if (amountEl) amountEl.value = String(Math.max(1, Math.round(scenario.portfolioHoldings || 1_000_000)));
+
+  renderCalc(metrics, livePoolStats, prices.mgsnUsd);
+  renderSupplyChart(metrics.pctSupply);
+
+  document.getElementById("sk-amount")?.addEventListener("input", () => renderCalc(metrics, livePoolStats, prices.mgsnUsd));
+  document.getElementById("sk-tier")?.addEventListener("change", () => renderCalc(metrics, livePoolStats, prices.mgsnUsd));
+
+  attachScenarioStudio(app, () => {
+    renderStakingPage(app, baseState, loadScenarioState().demoMode ? "demo" : hydrationMode);
+  });
+
+  if (prices.mgsnUsd) {
+    const el = document.getElementById("sk-mgsn-price");
+    if (el) el.textContent = fmt(prices.mgsnUsd, 7);
+  }
+}

@@ -24,6 +24,17 @@ Chart.register({
 import { demoDashboard, BUYBACK_PROGRAM, TOKEN_CANISTERS } from "./demoData";
 import { fetchLiveSpotPrices, fetchICPSwapPrices, fetchICPSwapPoolStats } from "./liveData";
 import { fetchBuybackProgramData } from "./onChainData.js";
+import {
+  applyScenarioToPoolStats,
+  applyScenarioToPrices,
+  attachScenarioStudio,
+  buildBuybackSourceChips,
+  buildScenarioStudioHTML,
+  buildSimulatedBuybackState,
+  loadScenarioState,
+  readViewCache,
+  writeViewCache,
+} from "./siteState.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -163,11 +174,13 @@ function logRow(entry, idx) {
     </div>`;
 }
 
-function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, totalSupply) {
+function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, totalSupply, studioHtml, statusHtml) {
   const hasRealVolume = livePoolStats?.mgsnVol30d != null || livePoolStats?.mgsnVol24h != null;
-  const liveTag = hasRealVolume
-    ? `<span class="bb-live-tag">real ICPSwap volume</span>`
-    : `<span class="bb-live-tag bb-live-tag--est">estimated</span>`;
+  const liveTag = buybackState?.status === "simulated"
+    ? `<span class="bb-live-tag bb-live-tag--demo">demo showcase</span>`
+    : hasRealVolume
+      ? `<span class="bb-live-tag">real ICPSwap volume</span>`
+      : `<span class="bb-live-tag bb-live-tag--est">estimated</span>`;
 
   let logSection;
   if (log.length > 0) {
@@ -209,6 +222,8 @@ function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, to
     </header>
 
     <div class="bb-page">
+      ${statusHtml}
+      ${studioHtml}
 
       <!-- Hero -->
       <section class="bb-hero">
@@ -410,6 +425,7 @@ const BUYBACK_CSS = `
 .bb-section-sub { font-size: 0.74rem; color: var(--muted); font-family: "IBM Plex Mono", monospace; margin: 0 0 14px; max-width: 720px; }
 .bb-live-tag { font-size: 0.62rem; padding: 2px 8px; border-radius: 4px; background: rgba(34,197,94,0.12); color: var(--positive); font-family: "IBM Plex Mono", monospace; margin-left: 4px; }
 .bb-live-tag--est { background: rgba(245,158,11,0.12); color: var(--gold); }
+.bb-live-tag--demo { background: rgba(249,115,22,0.12); color: var(--mgsn); }
 
 /* How-it-works */
 .bb-how-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 16px; }
@@ -480,42 +496,91 @@ async function bootstrap() {
   document.head.appendChild(styleEl);
 
   const app = document.querySelector("#app");
-  app.innerHTML = `<div class="loading-screen"><div class="loading-logo">M</div><span class="loading-text">Loading buyback data…</span></div>`;
+  const cachedState = readViewCache("buyback-page");
+  let baseState = buildBasePageState(cachedState ?? {});
+  renderBuybackPage(app, baseState, cachedState ? "cached" : "fallback");
 
-  const [spotResult, icpswapResult, poolResult, buybackResult] = await Promise.allSettled([
+  const [liveSpotResult, liveIcpswapResult, livePoolResult, liveBuybackResult] = await Promise.allSettled([
     fetchLiveSpotPrices(),
     fetchICPSwapPrices(),
     fetchICPSwapPoolStats(),
     fetchBuybackProgramData(),
   ]);
 
-  const mgsnNow    = icpswapResult.value?.mgsnUsd ?? demoDashboard.timeline.at(-1).mgsnPrice;
-  const icpNow     = spotResult.value?.icpUsd     ?? demoDashboard.timeline.at(-1).icpPrice;
-  const livePoolStats = poolResult.value ?? {};
-  const buybackState = buybackResult.value ?? {
+  baseState = buildBasePageState({
+    mgsnNow: liveIcpswapResult.value?.mgsnUsd ?? baseState.mgsnNow,
+    icpNow: liveSpotResult.value?.icpUsd ?? baseState.icpNow,
+    livePoolStats: livePoolResult.value ?? baseState.livePoolStats,
+    buybackState: liveBuybackResult.value ?? baseState.buybackState,
+  });
+  writeViewCache("buyback-page", baseState);
+  renderBuybackPage(app, baseState, "live");
+}
+
+bootstrap();
+
+function fallbackBuybackState() {
+  return {
     status: "unavailable",
     log: [],
     note: "The MGSN ledger could not be reached to verify buybacks.",
     currentSupply: demoDashboard.mgsnSupply,
   };
-  const buybackLog = buybackState.log ?? [];
-  const totalSupply = buybackState.currentSupply ?? demoDashboard.mgsnSupply;
-
-  const totals = computeTotals(buybackLog);
-
-  app.innerHTML = buildHTML(buybackLog, totals, livePoolStats, mgsnNow, icpNow, buybackState, totalSupply);
-
-  const initialDeposit = 500;
-  renderCalc(livePoolStats, mgsnNow);
-
-  document.getElementById("bb-deposit")?.addEventListener("input", () => {
-    renderCalc(livePoolStats, mgsnNow);
-  });
-
-  if (mgsnNow) {
-    const el = document.getElementById("bb-mgsn-price");
-    if (el) el.textContent = fmt(mgsnNow, 7);
-  }
 }
 
-bootstrap();
+function buildBasePageState(raw = {}) {
+  return {
+    mgsnNow: raw.mgsnNow ?? demoDashboard.timeline.at(-1).mgsnPrice,
+    icpNow: raw.icpNow ?? demoDashboard.timeline.at(-1).icpPrice,
+    livePoolStats: raw.livePoolStats ?? {},
+    buybackState: raw.buybackState ?? fallbackBuybackState(),
+  };
+}
+
+function renderBuybackPage(app, baseState, hydrationMode) {
+  const scenario = loadScenarioState();
+  const prices = applyScenarioToPrices(
+    { mgsnUsd: baseState.mgsnNow, icpUsd: baseState.icpNow },
+    scenario
+  );
+  const livePoolStats = applyScenarioToPoolStats(baseState.livePoolStats, scenario);
+  const simulatedState = buildSimulatedBuybackState(
+    baseState.buybackState?.currentSupply ?? demoDashboard.mgsnSupply,
+    prices.mgsnUsd,
+    scenario
+  );
+  const buybackState = simulatedState ?? baseState.buybackState ?? fallbackBuybackState();
+  const buybackLog = buybackState.log ?? [];
+  const totalSupply = buybackState.currentSupply ?? demoDashboard.mgsnSupply;
+  const totals = computeTotals(buybackLog);
+
+  app.innerHTML = buildHTML(
+    buybackLog,
+    totals,
+    livePoolStats,
+    prices.mgsnUsd,
+    prices.icpUsd,
+    buybackState,
+    totalSupply,
+    buildScenarioStudioHTML({
+      heading: "Buyback Demo Controls",
+      description: "Use one shared showcase state to demonstrate launch-day buyback activity before the public vault address is published.",
+      note: "Live ICPSwap volume still powers the calculator whenever it is available. Demo mode only simulates the execution history and hero totals.",
+    }),
+    buildBuybackSourceChips(buybackState, scenario, hydrationMode)
+  );
+
+  renderCalc(livePoolStats, prices.mgsnUsd);
+  document.getElementById("bb-deposit")?.addEventListener("input", () => {
+    renderCalc(livePoolStats, prices.mgsnUsd);
+  });
+
+  attachScenarioStudio(app, () => {
+    renderBuybackPage(app, baseState, loadScenarioState().demoMode ? "demo" : hydrationMode);
+  });
+
+  if (prices.mgsnUsd) {
+    const el = document.getElementById("bb-mgsn-price");
+    if (el) el.textContent = fmt(prices.mgsnUsd, 7);
+  }
+}

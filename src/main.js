@@ -34,6 +34,15 @@ if ("serviceWorker" in navigator) {
 
 import { demoDashboard } from "./demoData";
 import { fetchDashboardData } from "./liveData";
+import {
+  applyScenarioToDashboard,
+  attachScenarioStudio,
+  buildDashboardSourceChips,
+  buildScenarioStudioHTML,
+  loadScenarioState,
+  readViewCache,
+  writeViewCache,
+} from "./siteState.js";
 
 // ── Color palette ─────────────────────────────────────────────────────────────
 
@@ -753,7 +762,7 @@ function buildSidebarHTML(dashboard) {
 
 // ── Main Content ──────────────────────────────────────────────────────────────
 
-function buildMainHTML(dashboard, m) {
+function buildMainHTML(dashboard, m, studioHtml, statusHtml) {
   const changeClass = m.unrealisedPct >= 0 ? "positive" : "negative";
   const changeArrow = m.unrealisedPct >= 0 ? "▲" : "▼";
   const pnlSign     = m.unrealisedPct >= 0 ? "+" : "";
@@ -831,6 +840,8 @@ function buildMainHTML(dashboard, m) {
             <p class="main-subtitle">Interactive analysis with individual time controls • ${historySummary}</p>
           </div>
         </div>
+        ${statusHtml}
+        ${studioHtml}
       </div>
       <div class="chart-panels">
 
@@ -977,51 +988,71 @@ function updateSidebarPrices(m) {
   if (mgsnEl) mgsnEl.textContent = fmt(m.last.mgsnPrice, 4);
 }
 
-function render(app, dashboard) {
-  const m = computeMetrics(dashboard);
+function render(app, dashboard, hydrationMode = "live") {
+  const scenario = loadScenarioState();
+  const displayDashboard = applyScenarioToDashboard(dashboard, scenario);
+  const m = computeMetrics(displayDashboard);
+  state.liveIcpUsd = m.icpLive ?? state.liveIcpUsd;
   app.innerHTML =
     buildTopHeaderHTML(m) +
     `<div class="page-body">
-       ${buildSidebarHTML(dashboard)}
-       ${buildMainHTML(dashboard, m)}
+       ${buildSidebarHTML(displayDashboard)}
+       ${buildMainHTML(
+         displayDashboard,
+         m,
+         buildScenarioStudioHTML({
+           heading: "Dashboard Demo Controls",
+           description: "Scenario Studio persists across the whole site, so chart, strategy, buyback, staking, and burn assumptions stay in sync.",
+           note: "Use the showcase preset to demonstrate the full product loop, or keep live mode enabled to inspect current ICPSwap and ledger-backed data.",
+         }),
+         buildDashboardSourceChips(displayDashboard, scenario, hydrationMode)
+       )}
      </div>`;
-  attachEvents(app, dashboard);
+  attachEvents(app, displayDashboard);
+  attachScenarioStudio(app, () => {
+    render(app, dashboard, loadScenarioState().demoMode ? "demo" : hydrationMode);
+  });
   updateSidebarPrices(m);
   // Canvas elements are in the DOM with explicit width/height attributes.
   // Call synchronously — no timing hacks needed.
-  renderAllCharts(dashboard);
+  renderAllCharts(displayDashboard);
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 async function bootstrap() {
   const app = document.querySelector("#app");
-  app.innerHTML = `
-    <div class="loading-screen">
-      <div class="loading-logo">M</div>
-      <span class="loading-text">Loading MGSN Strategy Tracker…</span>
-    </div>`;
-
-  let dashboard = await fetchDashboardData();
-  if (!dashboard) dashboard = demoDashboard;
+  const cachedDashboard = readViewCache("dashboard");
+  let dashboard = cachedDashboard ?? demoDashboard;
   if (dashboard.marketStats?.icpSpotLive) {
     state.liveIcpUsd = dashboard.timeline.at(-1)?.icpPrice ?? null;
   }
 
   try {
-    render(app, dashboard);
+    render(app, dashboard, cachedDashboard ? "cached" : "fallback");
   } catch (e) {
     app.innerHTML = `<pre style="color:#ef4444;padding:20px;background:#0f1120;font-size:12px;white-space:pre-wrap">${e}</pre>`;
     return;
   }
 
+  const liveDashboard = await fetchDashboardData();
+  if (liveDashboard) {
+    dashboard = liveDashboard;
+    writeViewCache("dashboard", dashboard);
+    state.liveIcpUsd = dashboard.marketStats?.icpSpotLive
+      ? dashboard.timeline.at(-1)?.icpPrice ?? state.liveIcpUsd
+      : state.liveIcpUsd;
+    render(app, dashboard, "live");
+  }
+
   setInterval(async () => {
     const nextDashboard = await fetchDashboardData(true);
     if (nextDashboard) {
+      writeViewCache("dashboard", nextDashboard);
       state.liveIcpUsd = nextDashboard.marketStats?.icpSpotLive
         ? nextDashboard.timeline.at(-1)?.icpPrice ?? state.liveIcpUsd
         : state.liveIcpUsd;
-      render(app, nextDashboard);
+      render(app, nextDashboard, "live");
     }
   }, 60_000);
 }
