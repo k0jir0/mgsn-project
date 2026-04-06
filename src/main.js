@@ -601,6 +601,10 @@ function buildTopHeaderHTML(m) {
           <div class="logo-subtitle">on Internet Computer</div>
         </div>
       </div>
+      <nav class="s-nav" style="margin-left:20px;display:flex;align-items:center;gap:2px">
+        <a style="padding:6px 14px;border-radius:7px;font-size:0.78rem;font-weight:500;color:var(--mgsn);background:rgba(249,115,22,0.1);text-decoration:none;font-family:'IBM Plex Mono',monospace;letter-spacing:0.03em" href="/">Dashboard</a>
+        <a style="padding:6px 14px;border-radius:7px;font-size:0.78rem;font-weight:500;color:var(--muted);text-decoration:none;font-family:'IBM Plex Mono',monospace;letter-spacing:0.03em;transition:background 120ms,color 120ms" href="/strategy.html">Strategy Engine</a>
+      </nav>
       <div class="top-header-spacer"></div>
       <div class="top-header-badge">
         <div class="live-dot"></div>

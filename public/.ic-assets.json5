@@ -3,7 +3,7 @@
     "match": "**/*",
     "headers": {
       "Cache-Control": "no-store",
-      "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+      "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://api.coingecko.com https://ggzvv-5qaaa-aaaag-qck7a-cai.raw.icp0.io https://uvevg-iyaaa-aaaak-ac27q-cai.raw.icp0.io; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
       "Referrer-Policy": "strict-origin-when-cross-origin",
       "X-Content-Type-Options": "nosniff",
       "Permissions-Policy": "camera=(), microphone=(), geolocation=()"

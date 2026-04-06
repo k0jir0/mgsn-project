@@ -47,6 +47,12 @@ export default defineConfig(({ command }) => ({
   base: command === "build" && process.env.GITHUB_PAGES ? "/mgsn-project/" : "/",
   build: {
     assetsDir: "",
+    rollupOptions: {
+      input: {
+        main:     "./index.html",
+        strategy: "./strategy.html",
+      },
+    },
   },
   ...(command === "serve" ? { server: getDevServerConfig() } : {}),
 }));
