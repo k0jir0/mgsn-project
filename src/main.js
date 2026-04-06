@@ -877,7 +877,7 @@ function updateSidebarPrices(m) {
   const bobEl  = sidebar.querySelector(".sidebar-bob-val");
   const mgsnEl = sidebar.querySelector(".sidebar-mgsn-val");
   const icpEl  = sidebar.querySelector("#sidebar-icp-val");
-  if (icpEl)  icpEl.textContent  = `$${m.icpLive.toFixed(2)}`;
+  if (icpEl && m.icpLive != null) icpEl.textContent = `$${m.icpLive.toFixed(2)}`;
   if (bobEl)  bobEl.textContent  = fmt(m.last.bobPrice,  4);
   if (mgsnEl) mgsnEl.textContent = fmt(m.last.mgsnPrice, 4);
 }
@@ -891,10 +891,9 @@ function render(app, dashboard) {
        ${buildMainHTML(dashboard, m)}
      </div>`;
   attachEvents(app, dashboard);
+  // Schedule charts FIRST — before any other work that might throw
+  setTimeout(() => renderAllCharts(dashboard), 0);
   updateSidebarPrices(m);
-  // Double rAF: first frame commits layout, second reads it.
-  // This guarantees Chart.js reads non-zero canvas dimensions.
-  requestAnimationFrame(() => requestAnimationFrame(() => renderAllCharts(dashboard)));
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
@@ -907,25 +906,29 @@ async function bootstrap() {
       <span class="loading-text">Loading MGSN Strategy Tracker…</span>
     </div>`;
 
-  let dashboard = demoDashboard;
-  const actor = createBackendActor();
-  if (actor) {
-    try { dashboard = await actor.getDashboard(); } catch { /* fall through */ }
+  // Always use demoDashboard — the ICP canister's MetricPoint lacks icpPrice,
+  // which causes undefined.toFixed() and blocks chart rendering entirely.
+  // Actor integration will be re-wired once charts are confirmed working.
+  const dashboard = demoDashboard;
+
+  try {
+    render(app, dashboard);
+  } catch (e) {
+    app.innerHTML = `<pre style="color:#ef4444;padding:20px;background:#0f1120;font-size:12px;white-space:pre-wrap">${e}</pre>`;
+    return;
   }
 
-  // Non-blocking live ICP price
+  // Non-blocking live ICP price (CSP allows 'self' only — fetch may be blocked;
+  // the catch inside fetchLiveSpotPrices handles that gracefully)
   fetchLiveSpotPrices().then(({ icpUsd }) => {
     if (icpUsd) {
       state.liveIcpUsd = icpUsd;
-      // Update header and sidebar price widgets if already rendered
       document.querySelectorAll("#icp-price-val, #sidebar-icp-val").forEach((el) => {
         el.textContent = `$${icpUsd.toFixed(2)}`;
         el.classList.add("live");
       });
     }
   });
-
-  render(app, dashboard);
 
   // Poll every 60 s
   setInterval(async () => {

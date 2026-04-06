@@ -1,0 +1,16 @@
+﻿node.exe : Building canisters:
+At C:\Users\ryanv\AppData\Roaming\npm\icp.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/@icp-sdk/icp-cli/bin/icp.js" ...
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Building canisters::String) [], R 
+   emoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Creating canisters:
+All canisters already exist
+Setting environment variables:
+Installing canisters:
+Syncing canisters:
+Deployed canisters:
+  frontend: https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/
+  backend (Candid UI): https://a4gq6-oaaaa-aaaab-qaa4q-cai.icp0.io/?id=yr6am-caaaa-aaaah-qugoa-cai
