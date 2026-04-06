@@ -1,0 +1,374 @@
+MGSN Autonomous Strategy Engine: Design, Signals, and Portfolio Mechanics
+==========================================================================
+Ryan V. — April 6, 2026
+Internet Computer Protocol · MGSN Token
+
+
+ABSTRACT
+--------
+This paper describes the design and operation of the MGSN Strategy Engine, a
+browser-based autonomous decision system deployed as an ICP asset canister at
+yezrb-diaaa-aaaah-qugnq-cai.icp0.io. The engine ingests 22 months of real
+on-chain market data, live prices from the ICPSwap DEX, and ICP/USD spot rates
+to produce a composite buy/sell/hold signal, optimal position sizing, and
+multi-scenario portfolio analysis for the MGSN token. It also calculates
+liquidity provision yield, impermanent loss, and LP fee compounding projections
+for the MGSN/ICP pool on ICPSwap. No server-side code, external APIs owned by
+us, or custodial keys are required; the user's wallet executes all trades
+directly on ICPSwap.
+
+
+1. BACKGROUND AND MOTIVATION
+-----------------------------
+MGSN is a low-cap token on the Internet Computer (canister ID:
+mgsn7-iiaaa-aaaag-qjvsa-cai). Its market cap is a small fraction of the BOB
+token ecosystem (BOB canister: 7pail-xaaaa-aaaas-aabmq-cai), which in turn
+trades against ICP. Because MGSN has limited independent price history, its
+fair value is most legibly read through the lens of ecosystem momentum (BOB
+price series) and relative cost (MGSN priced in ICP).
+
+The goal of the engine is to answer three questions at any given moment:
+  1. Should I buy, hold, or reduce my MGSN position right now?
+  2. How large should each position entry be relative to my liquid capital?
+  3. What does liquidity provision in the MGSN/ICP pool return after fees and
+     impermanent loss?
+
+These questions are addressed through a six-factor composite signal, a Kelly
+Criterion position sizer, a 22-month backtest, and an LP yield + compound
+projector.
+
+
+2. DATA SOURCES
+---------------
+The engine uses three data feeds:
+
+  a) Historical timeline (22 months: July 2024 – April 2026)
+     Stored in demoData.js. Contains monthly snapshots of:
+       - ICP/USD (real, sourced from Binance/CoinGecko)
+       - BOB/USD (real, sourced from ICPSwap TokenStorage canister)
+       - MGSN/USD (current price applied uniformly; no stored history yet)
+       - BOB trading volume per month
+       - MGSN and BOB token supply (fixed)
+
+  b) Live ICP/USD spot price
+     Fetched from the CoinGecko public API on page load and every 60 seconds:
+       GET https://api.coingecko.com/api/v3/simple/price?ids=internet-computer&vs_currencies=usd
+
+  c) Live MGSN/USD and BOB/USD prices from ICPSwap
+     Fetched from the ICPSwap NodeIndex canister on ICP mainnet:
+       GET https://ggzvv-5qaaa-aaaag-qck7a-cai.raw.icp0.io/getAllTokens
+     This returns the current USD price for every token on ICPSwap, including
+     MGSN and BOB. Pool statistics (24h volume, TVL) are fetched from:
+       GET https://uvevg-iyaaa-aaaak-ac27q-cai.raw.icp0.io/token/list
+
+All three fetches run in parallel (Promise.allSettled) on bootstrap and every
+60 seconds thereafter. The engine degrades gracefully to historical data if any
+live feed fails.
+
+
+3. THE SIX-FACTOR COMPOSITE SIGNAL
+------------------------------------
+Each factor scores the current market state on a 0–100 scale where 0 = strong
+sell and 100 = strong buy. The composite is a weighted average of all six.
+
+  Signal 1 — BOB RSI (5-month, Wilder method)
+  Weight: 20%
+  Wilder's Relative Strength Index applied to the 22-month BOB price series
+  using a 5-period lookback (appropriate for monthly data). Thresholds:
+    RSI < 30  → score 90 (oversold, high reversal probability)
+    RSI < 40  → score 75 (accumulation zone)
+    RSI < 50  → score 60 (mildly bearish)
+    RSI < 60  → score 40 (mildly bullish)
+    RSI < 70  → score 25 (elevated, reduce new buys)
+    RSI ≥ 70  → score 10 (overbought)
+
+  Signal 2 — BOB SMA Crossover (3-month fast / 8-month slow)
+  Weight: 15%
+  Simple moving average of BOB price on two periods. The spread ((fast−slow)/slow)
+  determines direction and magnitude:
+    Spread < −15%  → score 90 (deep bear cross — prime accumulation)
+    Spread < −5%   → score 70 (bear cross)
+    Spread < 0%    → score 55 (approaching cross)
+    Spread < +5%   → score 45 (mild bull)
+    Spread < +15%  → score 30 (bull cross — slow entry)
+    Spread ≥ +15%  → score 15 (strong bull — late entry)
+
+  Signal 3 — mNAV Ratio
+  Weight: 20%
+  The market-NAV ratio is defined as: mNAV = (MGSN market cap) / (BOB market cap)
+  = (MGSN price × MGSN supply) / (BOB price × BOB supply).
+  This is compared against its 22-month historical average. A deeply discounted
+  ratio (MGSN undervalued relative to BOB ecosystem size) produces a high score:
+    mNAV < avg − 50%  → score 90
+    mNAV < avg − 20%  → score 70
+    near avg          → score 50
+    mNAV > avg + 40%  → score 10
+
+  Signal 4 — MGSN/ICP Relative Cost Basis
+  Weight: 15%
+  The price of MGSN expressed in ICP (MGSN/ICP) compared against its 22-month
+  average. When MGSN is historically cheap relative to ICP — i.e., buying MGSN
+  with ICP costs less than it has historically — the score rises:
+    Dev < −60%  → score 95 (very cheap vs ICP)
+    Dev < −30%  → score 75
+    Dev < 0%    → score 55
+    Dev < +30%  → score 35
+    Dev ≥ +30%  → score 15
+
+  Signal 5 — MACD on BOB (3/8/5 monthly)
+  Weight: 15%
+  MACD computed with EMA(3) − EMA(8), signal line EMA(5), optimised for monthly
+  data. The histogram direction (current − previous) is the primary input:
+    Histogram < 0 and turning up  → score 80 (early divergence — strongest entry)
+    Histogram < 0 and falling     → score 70 (trending down but accumulation context)
+    Histogram > 0 and turning down → score 35 (fading momentum — slow new buys)
+    Histogram > 0 and rising      → score 25 (late-stage bull — expensive)
+
+  Signal 6 — Bollinger Band %B on BOB (8-period, 2σ)
+  Weight: 15%
+  Bollinger Bands computed on the 22-month BOB series. %B places the current
+  price within the band: %B = (price − lower) / (upper − lower). Values near 0
+  mean the price is near the lower band (historically high-probability reversal):
+    %B < 5%   → score 92 (below lower band — extreme compression)
+    %B < 20%  → score 78 (lower zone)
+    %B < 40%  → score 62 (below midline)
+    %B < 60%  → score 50 (at midline)
+    %B < 80%  → score 35 (above midline)
+    %B < 95%  → score 22 (near upper band)
+    %B ≥ 95%  → score 8  (above upper band — overbought)
+
+  Composite = RSI×0.20 + SMA×0.15 + mNAV×0.20 + ICPVal×0.15 + MACD×0.15 + BB×0.15
+
+  Action thresholds:
+    Composite ≥ 75  → STRONG BUY
+    Composite ≥ 62  → BUY
+    Composite ≥ 50  → ACCUMULATE
+    Composite ≥ 38  → HOLD
+    Composite < 38  → REDUCE
+
+
+4. KELLY CRITERION POSITION SIZING
+------------------------------------
+After producing the composite signal, the engine calculates the mathematically
+optimal fraction of liquid capital to deploy per entry using the Kelly Criterion:
+
+  f* = (p × b − q) / b
+
+  where:
+    p = historical win rate of BOB monthly returns (closes above prior month)
+    q = 1 − p (loss rate)
+    b = average monthly gain / average monthly loss ratio
+
+Applied to the 22-month BOB return series, this produces a full-Kelly fraction.
+Because Kelly fractions are theoretically optimal but practically volatile, the
+engine applies quarter-Kelly (f*/4), capped at 25% of liquid capital per entry.
+
+Example at April 2026 values (p ≈ 0.55, b ≈ 1.4):
+  Full Kelly ≈ 16%
+  Quarter-Kelly ≈ 4%
+  Interpretation: deploy 4% of liquid crypto capital per MGSN entry.
+
+The engine displays this as "X% of portfolio per entry" alongside a brief note
+showing the win rate and W/L ratio from the 22-month sample.
+
+
+5. ALERT BOARD
+--------------
+The top of the strategy page shows up to five ranked alerts derived from the
+six-factor composite and live inputs. Alerts are categorised high / medium / low
+and include direct action instructions:
+
+  Example high-priority alerts:
+  - "STRONG BUY — all 6 signals aligned. Use 4.1% Kelly position sizing."
+  - "BOB RSI at 28.3 — below 35, historically the optimal MGSN accumulation zone."
+  - "Bollinger %B at 11% — BOB near lower band. Historically high-probability reversal."
+
+  Example medium-priority alerts:
+  - "MACD histogram turning positive from below zero — early upside divergence on BOB."
+  - "mNAV at 0.0003× — 40% below historical avg. Deep discount."
+
+Alerts are recalculated each time live prices update (every 60 seconds).
+
+
+6. ARBITRAGE DETECTOR
+----------------------
+The engine cross-references two price estimates of MGSN:
+  1. ICPSwap live price — fetched from the NodeIndex canister in real time.
+  2. BOB-implied price — the current MGSN price scaled by the BOB price ratio
+     between now and the most recent historical data point.
+     Formula: mgsnImplied = mgsnHistorical × (bobLive / bobHistorical)
+
+If the ICPSwap live price deviates from the BOB-implied price by more than 10%:
+  - Price < implied by >10%  → "BUY SIGNAL" (MGSN undervalued vs BOB momentum)
+  - Price > implied by >10%  → "SELL / LP" (MGSN overvalued vs BOB momentum)
+
+This reflects the thesis that MGSN and BOB trade with broad correlation due to
+shared ecosystem liquidity on ICPSwap. Short-term divergences represent
+exploitable relative-value trades.
+
+
+7. DCA BACKTEST ENGINE
+-----------------------
+The backtest engine simulates three 22-month investment strategies on the
+historical timeline and a fourth projected from current date:
+
+  Strategy A — Signal DCA
+  Monthly allocation is multiplied by a composite multiplier (0.25×–2.5×)
+  derived from four of the six signals: RSI, SMA crossover, MACD histogram,
+  and Bollinger %B. Each signal contributes a sub-multiplier:
+    RSI:  < 35 → 2×, < 50 → 1.5×, > 65 → 0.5×
+    SMA:  spread < −10% → 2×, < 0% → 1.5×, > 10% → 0.5×
+    MACD: histogram < 0 → 1.5×, ≥ 0 → 0.75×
+    BB%B: < 0.20 → 1.5×, > 0.80 → 0.6×
+  Composite multiplier = RSI×0.3 + SMA×0.3 + MACD×0.2 + BB×0.2
+
+  Strategy B — Flat DCA
+  Fixed allocation of $N per month regardless of market conditions.
+
+  Strategy C — Lump Sum
+  Total budget deployed on day one.
+
+MGSN price is projected throughout the backtest by scaling from the current
+MGSN/BOB ratio: mgsnProjected[t] = mgsnNow × (bobPrice[t] / bobNow). This
+uses the BOB price series as a proxy for MGSN trajectory.
+
+Results displayed: final portfolio value, total invested, ROI, and a Chart.js
+line chart with all three portfolio value series overlaid.
+
+
+8. LP YIELD CALCULATOR AND COMPOUND PROJECTOR
+-----------------------------------------------
+The engine models expected returns from providing liquidity in the MGSN/ICP
+pool on ICPSwap (0.3% fee tier).
+
+  Fee yield estimate:
+    Pool share = userDeposit / (poolTVL + userDeposit)
+    Annual fees = monthlyVolume × 0.003 × 12 × poolShare
+  
+  Volume is sourced from the live ICPSwap pool stats API if available; otherwise
+  a conservative proxy is used (5% of average monthly BOB volume).
+
+  Three scenarios are computed:
+    Conservative: 40% of estimated monthly volume
+    Base:         estimated monthly volume
+    Optimistic:   3× estimated monthly volume
+
+  Impermanent loss table:
+  The standard IL formula is applied across five MGSN/ICP price divergence
+  scenarios: −75%, −50%, no change, +100%, +300%.
+    IL(r) = (2√r / (1 + r)) − 1   where r = new price ratio / initial price ratio
+
+  Compound projection:
+  Fee income from the base scenario is modelled as monthly reinvestment over
+  12, 24, and 36 months. The compound growth curve is rendered on a Chart.js
+  line chart.
+
+
+9. PORTFOLIO P&L TRACKER
+-------------------------
+The user inputs their MGSN holdings (number of tokens) and average buy price.
+The engine calculates:
+  - Total cost basis
+  - Current value at live MGSN price
+  - Unrealised P&L (dollar and percentage)
+  - Value at four price target scenarios:
+      $0.0001  — 7× from current
+      $0.001   — 71× (approaching BOB parity era)
+      $0.01    — 715× (bull case)
+      $0.10    — 7,150× (maximum scenario)
+
+All values update automatically when live prices refresh.
+
+
+10. TECHNICAL CHARTS
+---------------------
+Six Chart.js 4.x charts are rendered:
+
+  a) RSI (5-period bar chart)
+     Green bars below 40, red bars above 60. Reference lines at 40 and 60.
+
+  b) MACD (mixed bar/line)
+     Histogram bars (green = positive, red = negative), MACD line (orange),
+     signal line (gold, dashed).
+
+  c) Bollinger Bands (line chart)
+     Upper band (faint orange), mid SMA (gold, dashed), lower band (faint blue),
+     BOB price (solid blue). Visually shows when price approaches the bands.
+
+  d) SMA Crossover (line chart)
+     BOB price (blue), fast 3-month SMA (orange, dashed), slow 8-month SMA
+     (gold, dashed). Crossovers visible as the orange and gold lines intersect.
+
+  e) DCA Backtest (line chart)
+     Signal DCA value (orange, filled), Flat DCA (blue), Lump Sum (gold, dashed),
+     invested capital (grey, dashed). Shows capital gain vs cost basis over 22 months.
+
+  f) LP Compound Projection (area chart)
+     12-month fee compounding curve vs flat no-compound baseline.
+
+
+11. ARCHITECTURE
+-----------------
+The engine is a single JavaScript module (src/strategy.js, ~1,425 lines) bundled
+by Vite 7.x into a static asset (dist/strategy-*.js, ~54 KB gzip: 15 KB).
+It is served from strategy.html, a second entry point added to vite.config.js
+alongside the existing dashboard (index.html).
+
+No backend canister changes were required. All computation runs in the browser.
+The ICP asset canister (frontend: yezrb-diaaa-aaaah-qugnq-cai) serves both
+HTML pages. The Content-Security-Policy in public/.ic-assets.json5 was updated
+to allow outbound fetch to:
+  - https://api.coingecko.com          (ICP/USD spot price)
+  - https://ggzvv-5qaaa-aaaag-qck7a-cai.raw.icp0.io  (ICPSwap NodeIndex)
+  - https://uvevg-iyaaa-aaaak-ac27q-cai.raw.icp0.io  (ICPSwap pool stats)
+
+Navigation between the dashboard and strategy engine is handled by a two-link
+nav bar added to both pages.
+
+
+12. LIMITATIONS AND FUTURE WORK
+---------------------------------
+  a) MGSN price history
+     MGSN has no stored on-chain price history as of April 2026. All backtesting
+     uses BOB as a proxy. As MGSN builds more trading history on ICPSwap, the
+     engine can be updated to use MGSN price series directly for RSI and BB.
+
+  b) Signal sample size
+     22 monthly data points is a small sample for technical indicators. RSI and
+     MACD are particularly sensitive to early data weights at this sample size.
+     As the dataset grows, the signals will become more statistically robust.
+
+  c) Kelly Criterion limitations
+     The Kelly fraction is computed from the BOB monthly return distribution,
+     not from MGSN directly. The distribution assumption is that monthly closes
+     represent independent Bernoulli trials, which understates serial correlation
+     in crypto price series. Quarter-Kelly is applied as a safety margin.
+
+  d) LP modelling
+     Volume estimates use BOB as a proxy at a 5% ratio. Actual MGSN pool volumes
+     can differ significantly. The live ICPSwap pool stats API will correct this
+     when the pool accumulates sufficient liquidity and volume data.
+
+  e) Automation
+     The current engine is a decision-support tool; actual trades must be
+     executed manually on ICPSwap. A future version could trigger automated
+     orders via ICPSwap's on-chain swap interface using Internet Identity
+     authentication and ICP agent calls.
+
+
+APPENDIX — Signal weight rationale
+------------------------------------
+  RSI    20% — Primary momentum oscillator; most reliable indicator at small sample sizes
+  mNAV   20% — Fundamental valuation; MGSN/BOB market cap ratio is the clearest value signal
+  SMA    15% — Trend direction; supports RSI in confirming bear/bull phase
+  ICP    15% — Relative entry cost; ICP-denominated price anchors real purchasing power
+  MACD   15% — Momentum acceleration; leading indicator for reversals
+  BB%B   15% — Mean reversion; probability-based band position signal
+
+All six signals are directionally consistent: high scores indicate a buy
+environment and low scores indicate a sell or wait environment. The weights
+reflect the relative reliability and independence of each signal given the
+22-month sample of monthly data.
+
+
+-- end of paper --

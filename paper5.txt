@@ -1,0 +1,302 @@
+MGSN Community Burn Program
+Technical and Economic Overview
+Paper 5 — May 2026
+
+─────────────────────────────────────────────────────────────────────────────
+
+ABSTRACT
+
+This paper introduces the MGSN Community Burn Program, the fourth and most
+direct value-creation mechanism in the MGSN tokenomics stack. Where the
+Buyback Program (Paper 3) and Staking Program (Paper 4) operate on circulating
+supply through demand pressure and voluntary lock-up, the Burn Program
+achieves permanent, irreversible supply destruction. Every MGSN token sent to
+the ICP blackhole canister (aaaaa-aa) is eliminated from existence. The total
+supply decreases. Every remaining token becomes a larger proportional share of
+the network. This paper covers the economic rationale for deflationary token
+design, the mechanics of the burn program, milestone structure, public
+leaderboard design, and how the burn program integrates with the three prior
+mechanisms into a complete value-preservation architecture.
+
+─────────────────────────────────────────────────────────────────────────────
+
+1. BACKGROUND: THE ECONOMICS OF SUPPLY DESTRUCTION
+
+Classical monetary theory states that, holding demand constant, a reduction in
+supply leads to an increase in the price per unit. In the context of a fixed-
+supply digital asset, this principle is especially powerful because there is no
+central authority capable of inflating the supply to counteract the scarcity
+effect.
+
+The MGSN token launched with a total supply of 77,000,000 tokens. Unlike fiat
+currencies or central-bank-managed assets, the supply of MGSN cannot be
+increased post-launch. The burn program introduces the only possible direction
+of supply change: downward.
+
+When tokens are burned:
+
+  (1) The total supply S decreases by the burned amount B.
+  (2) The remaining supply S' = S - B represents 100% of all MGSN that can
+      ever exist.
+  (3) If a holder owns N tokens before the burn, their proportional share of
+      the network increases from N/S to N/S', even without acquiring any
+      additional tokens.
+  (4) Market price adjusts toward a new equilibrium reflecting the reduced
+      supply, assuming demand is stable or growing.
+
+In practice, public burn events also carry positive signaling effects. Burns
+demonstrate long-term confidence in the asset by the burning party, increase
+community engagement, and attract attention from observers who interpret burns
+as a bullish indicator. The observable, verifiable, on-chain nature of ICP
+burns reinforces this signaling.
+
+─────────────────────────────────────────────────────────────────────────────
+
+2. THE ICP BLACKHOLE AND BURN MECHANICS
+
+On the Internet Computer Protocol, addresses are represented as canister
+principals or wallet identifiers. The canonical burn address is:
+
+  aaaaa-aa
+
+This is the ICP management canister principal, which on mainnet has no
+controller, no upgrade path, and no capability to send tokens. Any ICRC-1 or
+ICRC-2 compliant token — including MGSN — transferred to this address is
+permanently and irrecoverably destroyed. The transfer is recorded on-chain and
+visible to any observer querying the ledger.
+
+The burn process is permissionless. Any wallet that holds MGSN can execute a
+burn at any time without seeking approval from the MGSN team or any other
+party. This aligns incentives: token holders who believe in the project's
+long-term value can autonomously vote with their tokens by destroying supply.
+
+Verification procedure:
+  1. Holder transfers MGSN to aaaaa-aa from any ICP wallet.
+  2. The transaction ID (block height on the MGSN ledger) is recorded on-chain.
+  3. Community members or the MGSN team verify the burn transaction using the
+     ICP block explorer or a direct ledger query.
+  4. Verified burns are added to the public leaderboard displayed at
+     https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/burn.html
+
+─────────────────────────────────────────────────────────────────────────────
+
+3. MILESTONE ARCHITECTURE
+
+The burn program introduces a four-tier milestone system to incentivize
+progressive community participation. Milestones are denominated as percentages
+of the original total supply (77,000,000 MGSN).
+
+  ┌──────────────┬───────────────────────────────────────────────────────────┐
+  │ Badge        │ Milestone / Target                                        │
+  ├──────────────┼───────────────────────────────────────────────────────────┤
+  │ Ignition     │ 1% burned (770,000 MGSN)                                  │
+  │              │ Reward: Verified Burner badge on leaderboard              │
+  ├──────────────┼───────────────────────────────────────────────────────────┤
+  │ Combustion   │ 5% burned (3,850,000 MGSN)                                │
+  │              │ Reward: Top-5 Burner feature on site homepage             │
+  ├──────────────┼───────────────────────────────────────────────────────────┤
+  │ Inferno      │ 10% burned (7,700,000 MGSN)                               │
+  │              │ Reward: Permanent Hall of Flame entry                     │
+  ├──────────────┼───────────────────────────────────────────────────────────┤
+  │ Supernova    │ 20% burned (15,400,000 MGSN)                              │
+  │              │ Reward: Co-author credit on next project paper            │
+  └──────────────┴───────────────────────────────────────────────────────────┘
+
+Milestone progress is displayed in real time on the burn page as progress bars,
+with the cumulative burned amount and percentage tracked live against each
+target. The milestone chart (Chart.js) renders a comparative bar visualization
+showing achievement versus target for each badge tier.
+
+─────────────────────────────────────────────────────────────────────────────
+
+4. PUBLIC LEADERBOARD AND HALL OF FLAME
+
+4.1 Leaderboard Design
+
+The burn leaderboard aggregates all verified burn transactions by address.
+Multiple burns from the same address are summed, creating a persistent ranking
+based on total MGSN destroyed. The leaderboard table displays:
+
+  - Rank (with medal symbols for top 3)
+  - Shortened wallet address
+  - Total MGSN burned across all transactions
+  - Percentage of total supply destroyed
+  - Number of burn transactions
+  - Date of most recent burn
+
+Rankings are updated when transaction IDs are submitted and verified. This
+creates a public, permanent record of every participant's contribution to
+supply reduction.
+
+4.2 Hall of Flame
+
+The top three burners of all time are featured in the Hall of Flame — a
+dedicated recognition section on the burn page. The Hall of Flame is
+permanent: once an address earns a Hall entry by reaching the Inferno milestone
+(10% of supply burned), the entry is never removed.
+
+The progressive display (🥇🥈🥉 with flame counts increasing for lower ranks
+because higher-rank = more flames) creates a visible competitive dynamic that
+encourages sustained participation.
+
+─────────────────────────────────────────────────────────────────────────────
+
+5. BURN IMPACT CALCULATOR
+
+The burn page includes an interactive impact calculator that allows any visitor
+to model the supply and price effects of a hypothetical burn. The calculation
+uses a simplified deflationary model:
+
+  Price impact (%) ≈ burn_pct × elasticity
+  where: burn_pct = burnAmount / totalSupply × 100
+         elasticity = 0.5 (conservative half-unit response per 1% supply removed)
+
+  Estimated new price = current_price × (1 + price_impact_pct / 100)
+
+This model intentionally uses a conservative elasticity coefficient. Research
+on comparable DeFi tokens suggests true elasticity values between 0.4 and 1.2
+depending on liquidity depth, token concentration, and market conditions. By
+presenting a conservative floor estimate, the calculator avoids misleading users
+about guaranteed price outcomes while still illustrating the directional
+relationship between supply destruction and scarcity value.
+
+All calculator outputs include a prominent disclaimer that the model is
+illustrative and not a financial projection.
+
+─────────────────────────────────────────────────────────────────────────────
+
+6. INTEGRATION WITH THE FOUR-MECHANISM VALUE STACK
+
+The burn program completes a four-mechanism architecture, each targeting a
+distinct supply-demand lever:
+
+  Mechanism 1 — Strategy Engine
+  Role: Demand timing optimization
+  Effect: Provides 6-signal composite entry/exit scores so that market
+          participants can execute purchases at maximum signal alignment,
+          concentrating buying pressure at technically opportune moments.
+          Does not directly affect supply.
+
+  Mechanism 2 — Buyback Program
+  Role: Protocol-funded demand creation
+  Effect: 50% of all LP fee income from the MGSN/ICP pool on ICPSwap is
+          used to purchase MGSN from the open market on a monthly basis.
+          Purchased tokens are permanently removed from circulation.
+          Creates a predictable, programmatic demand floor.
+
+  Mechanism 3 — Staking Program
+  Role: Voluntary supply lock-up + holder yield
+  Effect: 50% of all LP fee income is distributed to token stakers. Staked
+          tokens cannot be sold during the lock period, reducing tradeable
+          float. Longer lock periods earn higher weight multipliers (up to 3×).
+          Creates direct incentive for holders to voluntarily reduce sell-side
+          supply.
+
+  Mechanism 4 — Community Burn Program (this paper)
+  Role: Voluntary, permanent supply destruction
+  Effect: Any holder can permanently destroy any quantity of MGSN at any
+          time. The destroyed tokens never return to circulation. Total supply
+          decreases permanently. All remaining holders' proportional ownership
+          increases.
+
+Together, these mechanisms create a self-reinforcing scarcity dynamic:
+  - Buyback removes supply using protocol revenue
+  - Staking reduces float using holder incentives
+  - Burns reduce total supply permanently using community conviction
+  - Strategy Engine concentrates demand at signal-optimal moments
+
+No protocol revenue is required for burns — they are entirely community-driven.
+This means the burn program adds scarcity pressure without cost to the
+protocol, funded purely by participant motivation.
+
+─────────────────────────────────────────────────────────────────────────────
+
+7. IMPLEMENTATION DETAILS
+
+Language:    JavaScript (ES modules), Vite 7.x build
+Framework:   Vite multi-page application, ICP asset canister
+Deployment:  Internet Computer Protocol mainnet
+Canister:    yezrb-diaaa-aaaah-qugnq-cai
+URL:         https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/burn.html
+
+Data model:
+  BURN_LOG    — Array of verified burn events { date, address, mgsnBurned, txId }
+  BURN_PROGRAM — Configuration constants including totalSupply, burnAddress,
+                 launchDate, and milestones array
+
+Live pricing is fetched from ICPSwap and spot price APIs on page load, using
+the same fetchICPSwapPrices() infrastructure shared across all MGSN pages.
+The burn page displays the current MGSN/USD price in the header for reference.
+
+The milestone chart uses Chart.js (bar type) to render a side-by-side
+visualization of target percentage versus achieved percentage for each badge
+tier, using the MGSN red accent (#ef4444) for color coding.
+
+Copy-to-clipboard functionality is implemented for the burn address display,
+using the navigator.clipboard API, providing a one-click path from the page
+to the user's transfer form.
+
+Navigation: The burn page is the fifth entry in the top navigation bar across
+all pages (Dashboard / Strategy / Buyback / Staking / Burn), using a distinct
+red active state to differentiate it from the violet Staking and orange
+Dashboard accent colors.
+
+─────────────────────────────────────────────────────────────────────────────
+
+8. RISK CONSIDERATIONS AND DISCLAIMERS
+
+Burns are permanent and irreversible. Token holders who send MGSN to the
+blackhole address cannot recover those tokens under any circumstances. The
+MGSN team has no ability to reverse a burn transaction, and no future protocol
+upgrade can undo a completed burn.
+
+The burn program is entirely voluntary. The MGSN team will not burn tokens on
+behalf of other holders, nor will the protocol execute automatic burns from
+holder wallets. All burns are initiated by the individual holder.
+
+Price impact projections in the calculator are estimates based on a simplified
+econometric model. Actual price outcomes depend on market depth, order flow,
+trading volume, and macroeconomic conditions, none of which can be predicted
+with certainty.
+
+This paper is for informational purposes only and does not constitute financial
+advice. Participation in burn events should be considered carefully in the
+context of each individual's investment objectives and risk tolerance.
+
+─────────────────────────────────────────────────────────────────────────────
+
+9. CONCLUSION
+
+The MGSN Community Burn Program closes the loop on the MGSN value stack. With
+the buyback program consuming 50% of LP fee revenue to purchase and remove
+tokens, and the staking program consuming the other 50% to lock supply while
+rewarding holders, the protocol was already recycling 100% of its revenue into
+$MGSN value. The burn program adds a mechanism that does not depend on fee
+revenue at all — it scales with community conviction.
+
+A 1% supply burn at current supply removes 770,000 tokens permanently.
+A 10% burn removes 7,700,000. A 20% burn — the Supernova milestone — removes
+15,400,000 tokens from an original supply of 77,000,000. At that point, every
+remaining holder owns a proportionally 25% larger share of the network than at
+launch, before considering any price appreciation from increased scarcity.
+
+The burn page, leaderboard, Hall of Flame, and milestone system are designed to
+make supply destruction visible, competitive, and rewarding. Transparency about
+what has been burned, by whom, and when — publicly verifiable on the ICP ledger
+— transforms an individual action into a collective movement.
+
+Total supply: 77,000,000 MGSN
+Burn address: aaaaa-aa (ICP blackhole)
+Program launch: 2026-05-01
+Live tracker: https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/burn.html
+
+─────────────────────────────────────────────────────────────────────────────
+
+Related papers:
+  paper1.txt — MGSN Strategy Engine (technical)
+  paper2.txt — MGSN Strategy Engine (layman)
+  paper3.txt — Buyback Program
+  paper4.txt — Staking Program
+  paper5.txt — Community Burn Program (this document)
+
+─────────────────────────────────────────────────────────────────────────────

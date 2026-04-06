@@ -54,3 +54,76 @@ export const demoDashboard = {
   ],
 };
 
+/**
+ * Public buyback log — every manual MGSN buyback executed with LP fee income.
+ * Add a new entry whenever a buyback is performed.
+ * All USD amounts reflect execution price at time of transaction.
+ */
+export const BUYBACK_LOG = [
+  // { date: "2026-04-06", usdSpent: 25, mgsnAcquired: 1_785_714, txId: "example-tx", note: "Genesis buyback — program launch" },
+];
+
+/**
+ * Buyback program parameters
+ */
+export const BUYBACK_PROGRAM = {
+  pledgePct:       50,    // % of LP fee income committed to buybacks
+  poolFee:         0.003, // ICPSwap fee tier
+  poolTvlUsd:      30_000, // estimated current pool TVL
+  monthlyVolEst:   15_000, // conservative monthly MGSN/ICP pool volume
+  nextBuybackDate: "2026-05-01", // first scheduled execution
+  intervalDays:    30,    // cadence
+};
+
+/**
+ * Staking program — lock MGSN to earn revenue share from LP fees
+ * The 50% of LP fee income NOT used for buybacks is distributed to stakers.
+ * Lock duration determines a multiplier on the user's staking weight.
+ */
+export const STAKING_PROGRAM = {
+  revenueSharePct:    50,    // % of LP fee income distributed to stakers (complement of buyback)
+  poolFee:            0.003,
+  poolTvlUsd:         30_000,
+  monthlyVolEst:      15_000,
+  launchDate:         "2026-06-01",
+  nextRewardDate:     "2026-06-01",
+  intervalDays:       30,
+  tiers: [
+    { label: "30-day lock",  days: 30,  multiplier: 1.0, badge: "Starter"   },
+    { label: "90-day lock",  days: 90,  multiplier: 1.5, badge: "Committed" },
+    { label: "180-day lock", days: 180, multiplier: 2.0, badge: "Believer"  },
+    { label: "365-day lock", days: 365, multiplier: 3.0, badge: "Diamond"   },
+  ],
+};
+
+/**
+ * Current staking positions snapshot (demo — will be live chain data at launch)
+ */
+export const STAKING_POSITIONS = [
+  // { address: "abcde-...", mgsnLocked: 5_000_000, tier: "90-day lock", lockedDate: "2026-06-01", unlockDate: "2026-09-01" },
+];
+
+/**
+ * Community Burn Program — voluntary on-chain burns by holders.
+ * Each entry represents a verified burn transaction.
+ * Burn address: the ICP blackhole canister (aaaaa-aa principal with no controller)
+ */
+export const BURN_LOG = [
+  // { date: "2026-04-06", address: "abcde-...", mgsnBurned: 1_000_000, txId: "example-tx", note: "Genesis burn" },
+];
+
+/**
+ * Burn program parameters and milestones
+ */
+export const BURN_PROGRAM = {
+  launchDate:    "2026-05-01",
+  totalSupply:   77_000_000,
+  burnAddress:   "aaaaa-aa",   // ICP blackhole — tokens sent here are unrecoverable
+  milestones: [
+    { pct: 1,  label: "1% burned",  badge: "Ignition",    reward: "Verified Burner badge on leaderboard"      },
+    { pct: 5,  label: "5% burned",  badge: "Combustion",  reward: "Top-5 Burner feature on site homepage"     },
+    { pct: 10, label: "10% burned", badge: "Inferno",     reward: "Permanent Hall of Flame entry"             },
+    { pct: 20, label: "20% burned", badge: "Supernova",   reward: "Co-author credit on next project paper"    },
+  ],
+};
+

@@ -1,0 +1,230 @@
+A Trading Dashboard for a Small Crypto Token on the Internet Computer
+======================================================================
+Ryan V. — April 6, 2026
+
+
+THE PROBLEM
+-----------
+When you own a small, illiquid cryptocurrency, there is almost no tooling
+available to help you make good decisions. Large tokens like Bitcoin or
+Ethereum have hundreds of charting platforms, price alerts, and analytical
+services. Small tokens — especially those living on newer blockchains like
+the Internet Computer Protocol (ICP) — have almost none. You are left
+guessing: is now a good time to buy more? Am I overpaying? Would I make
+more money just providing liquidity to the trading pool and collecting fees?
+
+This project builds that missing tooling for MGSN, a small token on ICP,
+and makes it available to anyone on the internet for free.
+
+
+WHAT IS MGSN?
+-------------
+MGSN is a token that lives entirely on the Internet Computer, a blockchain
+designed to run full software applications — not just financial transactions.
+Its closest ecosystem companion is another token called BOB. The two trade
+together on ICPSwap, which is the main decentralised exchange on ICP (think
+of it like a vending machine for swapping one token for another, with no
+company in the middle).
+
+MGSN has a very small market cap and limited trading history. That makes it
+both interesting and risky — small tokens can move dramatically in either
+direction, and without good information, buying and selling becomes gambling.
+
+
+WHAT THE PROJECT DOES
+---------------------
+The project is a two-page website deployed directly on the ICP blockchain.
+The first page is a market dashboard tracking how MGSN and BOB have moved
+over the past 22 months. The second page is the Strategy Engine: a system
+that processes all available market data and tells you what to do with it.
+
+The Strategy Engine answers three questions every time you open it:
+
+  1. Should I buy, hold, or sell right now?
+  2. If I am buying, how much should I put in?
+  3. If I want to earn passive income from the trading pool, what should
+     I expect to make?
+
+It updates its answers automatically every 60 seconds using live price data
+pulled directly from the ICPSwap exchange.
+
+
+HOW THE BUY/SELL SIGNAL WORKS
+-------------------------------
+The engine does not use a single piece of information to make its
+recommendation. It looks at six independent measures of the current market
+and combines them into one score from 0 to 100.
+
+Think of it like a doctor running six different tests before giving a
+diagnosis. Any single test might be misleading; six tests pointing the same
+way is much more reliable.
+
+The six measures are:
+
+  RSI — Is the token oversold or overbought?
+  RSI (Relative Strength Index) tracks how strongly a price has moved
+  recently. If a token has been falling for many months, its RSI drops
+  toward zero — a sign it may be due to recover. If it has been rising
+  strongly, the RSI climbs toward 100 — a sign it may be due to fall back.
+  The engine watches RSI on BOB (the larger companion token) because BOB
+  has more price history and the two tend to move together.
+
+  SMA Crossover — Is momentum changing direction?
+  Two moving averages are tracked: a fast one over 3 months and a slow one
+  over 8 months. When the fast line crosses below the slow line, it usually
+  means a downswing is underway — which is historically a good time to buy
+  because prices are lower. When the fast line is well above the slow line,
+  the market is already in a bull run and buying in is riskier.
+
+  mNAV Ratio — Is MGSN cheap relative to its ecosystem?
+  This compares the total value of all MGSN tokens in existence to the total
+  value of all BOB tokens. If that ratio is far below its historical average,
+  MGSN is cheap relative to the ecosystem it lives in — a value signal
+  similar to buying a stock that is trading below its book value.
+
+  ICP Cost Basis — How much ICP does one MGSN cost compared to history?
+  Since most people buy MGSN using ICP, the engine tracks the MGSN/ICP
+  exchange rate over time. If MGSN currently costs far fewer ICP than it
+  has historically, it is on sale priced in the currency you would use to
+  buy it.
+
+  MACD — Is momentum accelerating or decelerating?
+  The MACD (Moving Average Convergence Divergence) tracks the gap between
+  two moving averages. When this gap is negative but starting to close, it
+  often means the market is bottoming out — one of the strongest early
+  warning signs of a reversal. When the gap is wide and positive, the rally
+  may already be mature.
+
+  Bollinger Bands — How extreme is the current price versus recent history?
+  Bollinger Bands draw a corridor around recent price activity. When the
+  price touches the bottom of the corridor, it has moved unusually far in the
+  bearish direction — statistically, it tends to bounce back. The engine
+  measures exactly where the current price sits within this corridor.
+
+Each of the six measures is converted into a score. They are blended with
+different weights (RSI and mNAV carry more weight because they have been the
+most reliable signals historically). The final composite score maps to a
+clear action word:
+
+  75–100 → STRONG BUY
+   62–74 → BUY
+   50–61 → ACCUMULATE
+   38–49 → HOLD
+    0–37 → REDUCE
+
+
+HOW MUCH TO BUY: THE KELLY CRITERION
+--------------------------------------
+Even if the signal says "buy," you still need to decide how much to put in.
+Investing too little misses the opportunity; investing too much risks wiping
+out your capital if the signal is wrong.
+
+The engine uses a formula called the Kelly Criterion to answer this question
+mathematically. It looks at the 22-month history of BOB monthly returns —
+specifically, how often months ended up (wins) versus down (losses), and by
+how much on average. It then calculates the fraction of your available capital
+that, if deployed each time the signal activates, would grow your money the
+fastest in the long run.
+
+Because this formula can occasionally suggest aggressive positions, the engine
+applies "quarter-Kelly" — one quarter of the calculated value — as a safety
+margin. The result is shown as a percentage, for example: "Put in 4.1% of
+your liquid capital per entry."
+
+
+THE BACKTEST: DOES THIS STRATEGY ACTUALLY WORK?
+-------------------------------------------------
+A backtest applies a strategy to historical data to see how it would have
+performed. The engine runs a 22-month backtest comparing three approaches:
+
+  Signal DCA — The strategy described above. Each month, you invest your
+  usual budget, but the amount is multiplied up or down based on how strong
+  the current signal is. During bear markets (when signals are strongest),
+  you buy more. During bull markets, you buy less.
+
+  Flat DCA — The same total budget, but split evenly every month regardless
+  of market conditions.
+
+  Lump Sum — All the money invested on day one.
+
+Because MGSN does not have 22 months of stored price history yet, its price
+is projected from the BOB series — if BOB was X% higher two years ago and
+MGSN trades in correlation with BOB, MGSN was approximately X% higher too.
+The resulting chart shows all three portfolio value lines over time alongside
+the amount invested, revealing which strategy produced the best return on
+the capital deployed.
+
+
+PASSIVE INCOME: PROVIDING LIQUIDITY
+-------------------------------------
+Instead of simply buying and holding MGSN, you can deposit both MGSN and ICP
+into the ICPSwap trading pool and earn a share of the 0.3% fee charged on
+every trade that passes through. This is called liquidity provision (LP).
+
+The engine estimates what this would earn you. You enter the total amount you
+want to deposit and it shows:
+
+  Conservative, base, and optimistic annual yield estimates based on
+  expected trading volume in the MGSN/ICP pool.
+
+  A table of impermanent loss — the hidden cost of LP that occurs when the
+  price ratio between MGSN and ICP shifts. If MGSN triples against ICP while
+  you are providing liquidity, you actually end up with fewer MGSN than if
+  you had just held. The table quantifies this trade-off at five price scenarios.
+
+  A compounding chart showing how fee income, if reinvested monthly back into
+  the pool, grows over 12, 24, and 36 months.
+
+
+THE ALERT BOARD AND ARBITRAGE DETECTOR
+----------------------------------------
+At the top of the strategy page, an alert board surfaces the two or three
+most actionable insights at the current moment — in plain language. For
+example: "BOB RSI at 28 — below 35, historically the optimal MGSN
+accumulation zone." or "MACD histogram turning green — early reversal
+signal on BOB."
+
+Below the signals there is an arbitrage detector. It compares the current
+ICPSwap live price of MGSN against the price that BOB's recent momentum
+would imply MGSN should be worth right now. If the live price is more than
+10% below the implied price, the market may be mispricing MGSN relative to
+its ecosystem — a potential buying opportunity.
+
+
+PORTFOLIO TRACKER
+------------------
+You can enter how many MGSN tokens you own and what you paid for them on
+average. The engine then shows your unrealised profit or loss at the current
+price, and calculates the value of your position if MGSN reaches each of
+four milestone prices: $0.0001, $0.001, $0.01, and $0.10. These are simply
+round numbers representing different stages of growth, not predictions.
+
+
+WHERE IT LIVES
+--------------
+The entire website is deployed on the Internet Computer blockchain itself.
+There is no hosting company, no server bill, and no single point of failure.
+The code runs from a canister — a smart contract that serves web pages — and
+is accessible at:
+
+  Dashboard: https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/
+  Strategy Engine: https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/strategy.html
+
+The source code is public on GitHub at github.com/k0jir0/mgsn-project. The
+strategy engine is a single JavaScript file about 1,400 lines long. It uses
+no server-side code and requires no login. Trades are executed by the user
+directly on ICPSwap using their own wallet.
+
+
+WHAT THIS IS NOT
+-----------------
+This is a decision-support tool, not a guarantee of profit. The signals are
+based on historical patterns in a 22-month dataset — a small sample — and
+past performance does not predict future results. The Kelly Criterion gives a
+mathematically principled position size, but the underlying market is
+volatile and unpredictable. The best use of this engine is as one input
+among many in a broader thinking process, not as an automated instruction
+to follow blindly.
+
+
+-- end of essay --

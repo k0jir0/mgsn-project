@@ -1,0 +1,220 @@
+MGSN BUYBACK PROGRAM — HOW IT WORKS
+A Plain-Language Explanation
+April 6, 2026
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+INTRODUCTION
+
+A buyback program is one of the oldest and most reliable mechanisms for
+increasing the value of an asset. Corporations have used stock buybacks for
+decades. The principle is straightforward: fewer shares in circulation means
+each remaining share represents a larger slice of the same underlying value.
+
+The MGSN Buyback Program applies this same principle to a cryptocurrency token
+on the Internet Computer blockchain. This paper explains the mechanics in full —
+where the money comes from, how it is spent, what effect it has on the price,
+and why it creates a self-reinforcing loop over time.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PART 1: WHERE THE MONEY COMES FROM
+
+The buyback fund does not come from donations, inflation, or new token issuance.
+It comes from trading fees.
+
+MGSN trades on ICPSwap, a decentralized exchange (DEX) built on the Internet
+Computer. Like all DEXes, ICPSwap operates through liquidity pools. A liquidity
+pool is a smart contract that holds two tokens — in this case MGSN and ICP —
+and allows anyone to swap between them at any time without a centralized order
+book.
+
+When a trader swaps ICP for MGSN, they pay a 0.3% fee on the transaction. That
+fee does not go to a company. It goes directly to the liquidity providers (LPs)
+— the people who deposited MGSN and ICP into the pool to make trading possible.
+
+So the chain looks like this:
+
+    Traders swap tokens
+         ↓
+    0.3% fee charged on every swap
+         ↓
+    Fee distributed proportionally to liquidity providers
+         ↓
+    50% of that fee income is pledged to the buyback fund
+
+The buyback fund is therefore a direct function of trading volume. The more
+MGSN is traded, the more fees accumulate, the more buying power flows into the
+buyback program. It scales naturally with the activity of the market.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PART 2: WHAT HAPPENS WITH THAT MONEY
+
+Once per month, the pledged fee income is collected and used to purchase MGSN
+directly from the open market on ICPSwap.
+
+This is a "market buy" — it executes at whatever the current market price is,
+just like any other trader buying MGSN. The difference is that this buy is:
+
+  1. Systematic — it happens on a fixed schedule regardless of price sentiment
+  2. Transparent — every transaction ID is published in the public buyback log
+  3. Self-funded — it does not dilute supply or rely on outside capital
+  4. Permanent — the acquired MGSN is held or burned, never sold back
+
+The phrase "market buy" is important. When a buy order enters the market, it
+consumes the cheapest available MGSN from sellers. If the buyback spends $25,
+it removes $25 worth of MGSN from the circulating supply. The sellers who
+filled that order now hold USD (or ICP) instead of MGSN. The total MGSN
+available for purchase on the open market is now smaller.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PART 3: WHY THIS INCREASES THE PRICE
+
+Token price is determined by supply and demand. A buyback simultaneously
+affects both sides of that equation.
+
+ON THE SUPPLY SIDE:
+Every buyback removes MGSN from circulating supply. MGSN has a fixed maximum
+supply — no new tokens can ever be created. When tokens are acquired and held
+(or burned), the total available on the market permanently shrinks. Supply
+compression is the most direct form of price support because it changes the
+fundamental scarcity of the asset. If demand stays constant and supply falls,
+price must rise.
+
+ON THE DEMAND SIDE:
+Every monthly buyback is a guaranteed buy event. Markets are forward-looking.
+Sophisticated buyers anticipate future demand and price it in early. When
+participants know a systematic buyer will enter the market on a fixed schedule,
+they are less likely to sell at a discount in the days leading up to it. This
+creates a demand floor — a price level below which sellers are reluctant to go
+because they know a buyer is coming.
+
+ON MARKET PSYCHOLOGY:
+Public buyback programs signal confidence. When the people closest to a project
+(the liquidity providers and the team) are committing real money to buy the
+token rather than sell it, it sends a credible signal to the market. This
+reduces the "fear of holding" that suppresses price in small-cap tokens and
+attracts longer-term holders who stabilize the price over time.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PART 4: THE COMPOUNDING LOOP
+
+The most powerful feature of this design is that it compounds over time. Here
+is why:
+
+  Step 1: LPs add liquidity to the MGSN/ICP pool.
+  Step 2: Larger pool → tighter price spread → more traders use the pool.
+  Step 3: More trading → more fees collected.
+  Step 4: More fees → larger monthly buyback.
+  Step 5: Larger buyback → more supply removed → price rises.
+  Step 6: Higher MGSN price → LP positions worth more → LPs earn more fees.
+  Step 7: Return to Step 2, with a higher baseline.
+
+Each cycle reinforces the next. This is not guaranteed — external market
+conditions can interrupt any loop — but the structural incentive exists and
+becomes stronger as the pool grows. Critically, the gains do not require new
+participants at each stage. The same pool of liquidity, if trading volume
+grows, generates larger and larger buybacks on its own.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PART 5: A WORKED NUMERICAL EXAMPLE
+
+Let's use real numbers to make this concrete.
+
+  Current pool TVL (total value locked):  $30,000
+  Estimated monthly trading volume:       $15,000
+  Pool fee rate:                           0.3%
+  Monthly fee collected by pool:          $15,000 × 0.003 = $45
+
+  Suppose you deposit $500 into the pool.
+  Your share of the pool:                  $500 / $30,500 = 1.64%
+  Your monthly fee income:                 $45 × 0.0164 = $0.74
+  Your buyback pledge (50% of fees):       $0.37/month = $4.44/year
+
+That sounds small — but the math scales linearly. A $50,000 deposit from a
+single large LP would generate ~$74/month in fees and $37/month in buyback
+pressure ($444/year). Across many LPs, those amounts aggregate into meaningful
+and consistent market purchases.
+
+In a scenario where monthly volume grows to $150,000 (10× growth — plausible
+as MGSN gains visibility):
+
+  Monthly fee collected:  $450
+  Your share (at $500):   $0.74 × 10 = $7.40/month
+  Buyback pledge:         $3.70/month = $44.40/year
+
+The buyback contribution from the same $500 deposit grows tenfold purely from
+increased trading activity, with no additional capital required from the LP.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PART 6: HOW IT DIFFERS FROM INFLATION-BASED TOKENOMICS
+
+Many crypto projects attempt to increase token value through staking rewards or
+yield farming, where new tokens are minted and distributed to holders. This
+approach has a fundamental flaw: to pay rewards, the protocol must inflate
+supply. Inflation is deflationary for price. If 10% of supply is minted each
+year as rewards, the token must grow its market cap by 10% just to maintain the
+same price. Most tokens fail this test, and the rewards are eroded by the very
+inflation that funded them.
+
+The MGSN buyback model works in the opposite direction:
+
+  Inflation-based model:  mint tokens → distribute → supply grows → price diluted
+  Buyback model:          collect fees → buy tokens → supply shrinks → price rises
+
+No new MGSN is created. The buyback program is powered entirely by the economic
+activity already happening around the token, redirected back into demand. This
+makes it structurally sound and sustainable indefinitely, as long as trading
+volume exists.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PART 7: TRANSPARENCY AND VERIFICATION
+
+Every buyback executed under this program is recorded on the Internet Computer
+blockchain. The transaction ID, date, USD amount spent, and MGSN acquired are
+all published in the public buyback log on the MGSN Strategy Tracker website.
+
+Anyone can verify:
+  - The transaction exists on-chain using the ICP block explorer
+  - The MGSN was purchased at the market price logged
+  - The acquired MGSN is held in a public wallet address
+  - No MGSN from the buyback pool has been sold back to the market
+
+This transparency is not optional — it is the foundation of the program's
+credibility. A buyback program that cannot be verified is merely a marketing
+claim. The on-chain, timestamped, publicly auditable record transforms it into
+a provable commitment.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SUMMARY
+
+The MGSN Buyback Program increases token value through three simultaneous
+mechanisms:
+
+  1. SUPPLY REDUCTION — Purchased tokens are permanently removed from the
+     market, compressing the float available to sellers.
+
+  2. CONSISTENT DEMAND — Scheduled monthly market buys create a predictable
+     demand floor, reducing the depth of price drawdowns.
+
+  3. STRUCTURAL ALIGNMENT — LP incentives and holder incentives point in the
+     same direction. LPs benefit from price appreciation, so their fee income
+     funding buybacks benefits everyone in the ecosystem simultaneously.
+
+The program does not require external capital, does not inflate supply, and
+scales automatically with trading volume. Its effects are verifiable on-chain
+and its logic is transparent. It is, in essence, the market's own activity
+redirected to support itself.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Live at: https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/buyback.html
+Strategy Engine: https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/strategy.html
+Dashboard: https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/

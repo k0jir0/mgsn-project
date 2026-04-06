@@ -787,7 +787,10 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio) {
       </div>
       <nav class="s-nav">
         <a class="s-nav-link" href="/">Dashboard</a>
-        <a class="s-nav-link active" href="/strategy.html">Strategy Engine</a>
+        <a class="s-nav-link active" href="/strategy.html">Strategy</a>
+        <a class="s-nav-link" href="/buyback.html">Buyback</a>
+        <a class="s-nav-link" href="/staking.html">Staking</a>
+        <a class="s-nav-link" href="/burn.html">Burn</a>
       </nav>
       <div class="top-header-spacer"></div>
       <div class="top-header-badge"><div class="live-dot"></div><span class="badge-text">Live signals</span></div>
@@ -828,6 +831,7 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio) {
             <a class="s-cta-btn s-cta-primary" href="${ICPSWAP_SWAP_URL}" target="_blank" rel="noopener noreferrer">Buy MGSN →</a>
             <a class="s-cta-btn s-cta-secondary" href="${ICPSWAP_LP_URL}" target="_blank" rel="noopener noreferrer">Add Liquidity</a>
             <a class="s-cta-btn s-cta-secondary" href="${ICPSWAP_INFO_MGSN}" target="_blank" rel="noopener noreferrer">View MGSN on ICPSwap</a>
+            <button id="share-signal-btn" class="s-cta-btn s-cta-secondary">&#128203; Copy Signal</button>
             <p class="s-cta-disclaimer">Executes on ICPSwap DEX. You control your keys. Not financial advice.</p>
           </div>
         </div>
@@ -1279,8 +1283,10 @@ const STRATEGY_CSS = `
   .s-charts-row { grid-template-columns: 1fr; }
   .s-calc-grid  { grid-template-columns: 1fr; }
   .s-hero { flex-direction: column; gap: 20px; }
-  .s-nav  { display: none; }
   .s-signal-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .s-nav  { display: none; }
 }
 @media (max-width: 480px) {
   .s-signal-grid { grid-template-columns: 1fr; }
@@ -1358,6 +1364,15 @@ async function bootstrap() {
   });
   ["port-holdings", "port-avgcost"].forEach((id) =>
     document.getElementById(id)?.addEventListener("input", () => renderPortfolioCalc(sig, bt)));
+
+  // Share signal button
+  document.getElementById("share-signal-btn")?.addEventListener("click", () => {
+    const shareText = `MGSN Signal: ${sig.action} (${sig.composite.toFixed(0)}/100) · Kelly: ${(sig.kelly.fraction * 100).toFixed(1)}% · MGSN: ${fmt(sig.mgsnNow, 7)} · ${new Date().toDateString()} · https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/strategy.html`;
+    navigator.clipboard.writeText(shareText).then(() => {
+      const btn = document.getElementById("share-signal-btn");
+      if (btn) { btn.textContent = "\u2713 Copied!"; setTimeout(() => { btn.innerHTML = "&#128203; Copy Signal"; }, 2000); }
+    });
+  });
 
   // Update price display
   if (liveIcpUsd) {

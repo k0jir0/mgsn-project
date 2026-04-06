@@ -51,6 +51,9 @@ export default defineConfig(({ command }) => ({
       input: {
         main:     "./index.html",
         strategy: "./strategy.html",
+        buyback:  "./buyback.html",
+        staking:  "./staking.html",
+        burn:     "./burn.html",
       },
     },
   },
