@@ -1,48 +1,101 @@
-# BOB / MGSN Strategy Tracker
+# MGSN Strategy Tracker
 
-## About
+**Live:** https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/
 
-MGSN Strategy Tracker is a SaylorTracker-inspired analytics dashboard built on the Internet Computer Protocol (ICP). It tracks BOB and MGSN token performance over time, presenting market snapshots, derived metrics, and strategy insights through a clean, responsive frontend. The backend is powered by a Motoko canister that stores and serves token timeline data, while the frontend is a Vite-based asset canister deployed directly on ICP. The project is designed to evolve from seeded historical data toward live on-chain feeds — either via ICP HTTPS outcalls to external data sources or direct integration with ledger and DEX analytics once the BOB and MGSN token identifiers are finalized.
+A full-stack analytics and tokenomics dashboard for the $MGSN / $BOB token pair, deployed as an ICP asset canister. Combines real-time market data from ICPSwap with four value-support mechanisms: a 6-signal strategy engine, a protocol-funded buyback program, a revenue-share staking program, and a community burn program.
 
-SaylorTracker-inspired dashboard built for the Internet Computer with:
+---
 
-- a Motoko backend canister for seeded token snapshots
-- a Vite frontend deployed as an ICP asset canister
-- modern `icp` configuration instead of legacy `dfx`
+## Pages
+
+| Route | Description |
+|---|---|
+| `/` | Dashboard — BOB/MGSN price charts, portfolio tracker, arbitrage signals, live analytics |
+| `/strategy.html` | Strategy Engine — 6-signal composite score, Kelly sizing, DCA backtest, LP yield calculator |
+| `/buyback.html` | Buyback Program — 50% of LP fees fund monthly MGSN market buys, schedule and log |
+| `/staking.html` | Staking Program — 50% of LP fees distributed to stakers, 4 lock tiers with multipliers, APY calculator |
+| `/burn.html` | Community Burn — voluntary permanent supply destruction, leaderboard, Hall of Flame, milestone tracker |
+
+---
+
+## Tokenomics stack
+
+All four mechanisms target a different lever on $MGSN value:
+
+- **Strategy Engine** — timing signal for optimal buy/sell execution
+- **Buyback Program** — protocol revenue → market demand → permanent supply removal
+- **Staking Program** — protocol revenue → holder yield → float compression (30/90/180/365-day tiers, 1.0–3.0× multipliers)
+- **Community Burn** — voluntary irreversible supply destruction by any holder; public leaderboard and milestone badges (Ignition 1% / Combustion 5% / Inferno 10% / Supernova 20%)
+
+The buyback and staking programs together consume **100% of LP fee income** and redirect it back into $MGSN value. Burn adds scarcity pressure at zero protocol cost.
+
+---
+
+## Token identifiers
+
+| Token | Canister ID |
+|---|---|
+| MGSN | `mgsn7-iiaaa-aaaag-qjvsa-cai` |
+| BOB | `7pail-xaaaa-aaaas-aabmq-cai` |
+| ICP | `ryjl3-tyaaa-aaaaa-aaaba-cai` |
+
+ICPSwap swap URL: https://app.icpswap.com/swap?input=ryjl3-tyaaa-aaaaa-aaaba-cai&output=mgsn7-iiaaa-aaaag-qjvsa-cai
+
+---
 
 ## Stack
 
-- `icp-cli` for project lifecycle and deployment
-- Motoko with `mo:core`
-- Vite with `@icp-sdk/bindgen`
-- ICP asset canister for frontend hosting
+- **Frontend:** Vite 7.x multi-page app, Chart.js, vanilla JS ES modules
+- **Backend:** Motoko canister (ICP) — query-only, seeded BOB/MGSN timeline
+- **Deploy:** `icp-cli` to ICP asset canister `yezrb-diaaa-aaaah-qugnq-cai`
+- **Live data:** ICPSwap pool stats + spot price APIs via `src/liveData.js`
 
-## Files that matter
+---
 
-- `backend/main.mo`: Motoko canister and seeded BOB/MGSN timeline
-- `backend/backend.did`: committed Candid file for bindgen
-- `src/main.js`: dashboard rendering and derived analytics
-- `public/.ic-assets.json5`: asset canister routing and security headers
-- `icp.yaml`: canister definitions using the current ICP recipes
+## Key source files
+
+```
+src/
+  main.js          — Dashboard (price charts, portfolio tracker, arbitrage, alerts)
+  strategy.js      — Strategy Engine (6-signal score, Kelly sizing, DCA, LP yield)
+  buyback.js       — Buyback Program page
+  staking.js       — Staking Program page (APY calculator, tier cards, supply chart)
+  burn.js          — Community Burn page (leaderboard, milestones, impact calculator)
+  demoData.js      — Shared constants: BUYBACK_PROGRAM, STAKING_PROGRAM, BURN_PROGRAM
+  liveData.js      — Live price + pool stat fetchers (ICPSwap, spot APIs)
+  styles.css       — Shared CSS variables and base styles
+
+backend/
+  main.mo          — Motoko canister with seeded BOB/MGSN snapshots
+  backend.did      — Candid interface for bindgen
+
+paper1.txt         — Strategy Engine technical paper
+paper2.txt         — Strategy Engine layman paper
+paper3.txt         — Buyback Program paper
+paper4.txt         — Staking Program paper
+paper5.txt         — Community Burn Program paper
+```
+
+---
 
 ## Local setup
 
-1. Install frontend dependencies:
+1. Install dependencies:
 
    ```powershell
    npm install
    ```
 
-2. **Build the Motoko WASM** (Windows — `mops` requires Linux, so use Docker):
+2. **Build the Motoko WASM** (Windows — `mops` requires Linux, use Docker):
 
    ```powershell
    docker run --rm -v "${PWD}:/project" -w /project node:22 bash -c 'npm install -g ic-mops 2>/dev/null; mops install 2>/dev/null; MOC=/root/.cache/mops/moc/1.3.0/moc; SOURCES=$(mops sources); $MOC backend/main.mo --omit-metadata candid:service $SOURCES -o backend/backend.wasm'
    ic-wasm backend/backend.wasm -o backend/backend.wasm metadata candid:service -f backend/backend.did -v public --keep-name-section
    ```
 
-   On Linux/macOS `icp deploy` uses the `@dfinity/motoko@v4.1.0` recipe directly and this step is not needed.
+   On Linux/macOS, `icp deploy` uses the `@dfinity/motoko@v4.1.0` recipe directly.
 
-3. Start the project-local ICP network:
+3. Start project-local ICP network:
 
    ```powershell
    icp network start -d
@@ -54,26 +107,27 @@ SaylorTracker-inspired dashboard built for the Internet Computer with:
    icp deploy
    ```
 
-5. Optional: run the Vite dev server after the backend is deployed:
+5. Optional: Vite dev server (after backend is deployed):
 
    ```powershell
    npm run dev
    ```
 
-The Vite config follows the current ICP guidance and injects the `ic_env` cookie during local development so the frontend can discover the backend canister ID.
+---
 
-## Data model
+## Deploy to mainnet
 
-This first version uses seeded BOB/MGSN market snapshots from `backend/main.mo`. That gives you a working Motoko-backed dashboard immediately while the real token source IDs and feed strategy are still undefined.
+```powershell
+Push-Location "C:\path\to\MGSN"
+npx vite build
+icp deploy -e ic -y
+Pop-Location
+```
 
-To swap in live data later, the cleanest next step is one of these:
-
-1. replace the seed series directly in `backend/main.mo`
-2. wire a trusted HTTPS data source into the canister with ICP HTTPS outcalls
-3. replace the seed model with direct ledger or DEX-derived analytics once the BOB and MGSN identifiers are finalized
+---
 
 ## Notes
 
-- The backend is query-only right now, which keeps the first deployment path simple and safe.
-- Canister ID mappings are stored in `.icp/cache/mappings/local.ids.json`. The `.gitignore` excludes `.icp/cache/` — if you need to preserve IDs across machines, note them from `icp canister status backend` / `icp canister status frontend`.
-- On Windows the `@dfinity/motoko` recipe cannot run because `mops toolchain bin moc` requires a Linux shell. The `icp.yaml` uses a custom build step that copies a pre-built WASM instead. Rebuild it via the Docker step above whenever `backend/main.mo` changes.
+- The backend is query-only, which keeps deployment simple and safe.
+- On Windows, the `@dfinity/motoko` recipe cannot run because `mops toolchain bin moc` requires Linux. The `icp.yaml` uses a custom build step with a pre-built WASM. Rebuild via Docker whenever `backend/main.mo` changes.
+- Canister ID mappings are in `.icp/cache/mappings/local.ids.json` (gitignored). Preserve IDs from `icp canister status backend` if needed across machines.
