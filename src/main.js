@@ -130,6 +130,10 @@ function fmt(v, d = 2) {
   }).format(v);
 }
 
+function fmtTokenUsd(v, threshold = 0.001, tinyDigits = 7, normalDigits = 4) {
+  return fmt(v, Math.abs(v) < threshold ? tinyDigits : normalDigits);
+}
+
 function compact(v) {
   return new Intl.NumberFormat("en-US", {
     notation: "compact", maximumFractionDigits: 2,
@@ -767,7 +771,7 @@ function buildMainHTML(dashboard, m, scenarioHeaderHtml) {
         <div class="reserve-meta-list">
           <div class="meta-item">
             <span class="meta-label">Avg Cost</span>
-            <span class="meta-value">${fmt(m.avgCostMgsn, 4)}</span>
+            <span class="meta-value">${fmtTokenUsd(m.avgCostMgsn)}</span>
           </div>
           <div class="meta-item">
             <span class="meta-label">Unrealised P&L</span>
@@ -816,7 +820,7 @@ function buildMainHTML(dashboard, m, scenarioHeaderHtml) {
 
         ${cp("sma", "BOB & MGSN 200-SMA", "Spot prices with long-term moving average overlay", [
           { label: "BOB spot",    value: fmt(m.last.bobPrice,  4), cls: "bob"  },
-          { label: "MGSN spot",   value: fmt(m.last.mgsnPrice, 4), cls: "mgsn" },
+          { label: "MGSN spot",   value: fmtTokenUsd(m.last.mgsnPrice), cls: "mgsn" },
           { label: "BOB Δ",       value: pctFmt(bobChg),           cls: bobChg  >= 0 ? "pos" : "neg" },
           { label: "MGSN Δ",      value: pctFmt(m.mgsnChange),     cls: m.mgsnChange >= 0 ? "pos" : "neg" },
         ])}
@@ -991,7 +995,7 @@ function updateSidebarPrices(m) {
   const icpEl  = sidebar.querySelector("#sidebar-icp-val");
   if (icpEl && m.icpLive != null) icpEl.textContent = `$${m.icpLive.toFixed(2)}`;
   if (bobEl)  bobEl.textContent  = fmt(m.last.bobPrice,  4);
-  if (mgsnEl) mgsnEl.textContent = fmt(m.last.mgsnPrice, 4);
+  if (mgsnEl) mgsnEl.textContent = fmtTokenUsd(m.last.mgsnPrice);
 }
 
 function render(app, dashboard, hydrationMode = "live") {
