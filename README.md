@@ -1,146 +1,175 @@
 # MGSN Strategy Tracker
 
-**Live:** https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/
+Live site: https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/
 
-A full-stack analytics and tokenomics dashboard for the $MGSN / $BOB token pair, deployed as an ICP asset canister. Combines live market data from ICPSwap canisters with four value-support mechanisms: a 6-signal strategy engine, a protocol-funded buyback program, a revenue-share staking program, and a community burn program.
+MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosystem. It combines live ICPSwap market data, MGSN ledger data, a scenario studio for demos, and tokenomics-focused calculators across dashboard, strategy, buyback, staking, and burn pages.
 
----
+## What Is Live Today
 
-## Pages
+- Dashboard uses live ICPSwap prices and pool stats, plus monthly history with a current live point.
+- Strategy uses live market inputs for signals, DCA modeling, LP yield estimates, and shareable signal summaries.
+- Buyback is live as a calculator and schedule page, and stays in an honest prelaunch state until a public buyback vault is published.
+- Staking is live in launch-preview mode with real market assumptions, but needs a public staking canister to show live positions.
+- Burn reads live MGSN ledger and archive data to show supply, burn totals, leaderboard, and burn milestones.
+- Scenario Studio persists across pages so one demo state can drive the full site consistently.
+- Mobile navigation and scrolling are tuned so the site behaves like a usable platform on phones and tablets.
 
-| Route | Description |
-|---|---|
-| `/` | Dashboard — BOB/MGSN price charts, portfolio tracker, arbitrage signals, live analytics |
-| `/strategy.html` | Strategy Engine — 6-signal composite score, Kelly sizing, DCA backtest, LP yield calculator |
-| `/buyback.html` | Buyback Program — 50% of LP fees fund monthly MGSN market buys, schedule and log |
-| `/staking.html` | Staking Program — 50% of LP fees distributed to stakers, 4 lock tiers with multipliers, APY calculator |
-| `/burn.html` | Community Burn — voluntary permanent supply destruction, leaderboard, Hall of Flame, milestone tracker |
+## Routes
 
----
+| Route | Purpose |
+| --- | --- |
+| `/` | Dashboard: charts, live prices, reserve view, volume/liquidity, portfolio context |
+| `/strategy.html` | Strategy engine: 6-signal view, Kelly sizing, DCA, LP yield, portfolio tools |
+| `/buyback.html` | Buyback program: schedule, calculator, program status, execution log area |
+| `/staking.html` | Staking program: lock tiers, APY estimator, supply impact, launch-preview state |
+| `/burn.html` | Community burn: ledger-indexed burns, leaderboard, milestones, impact calculator |
 
-## Tokenomics stack
+## Data Sources
 
-All four mechanisms target a different lever on $MGSN value:
+- ICPSwap info API for token and pool snapshots
+- ICPSwap NodeIndex and TokenStorage canisters for token history and spot references
+- ICPSwap pool daily chart endpoint for pool TVL and rolling volume context
+- MGSN ledger and archive scans for supply and burn activity
 
-- **Strategy Engine** — timing signal for optimal buy/sell execution
-- **Buyback Program** — protocol revenue → market demand → permanent supply removal
-- **Staking Program** — protocol revenue → holder yield → float compression (30/90/180/365-day tiers, 1.0–3.0× multipliers)
-- **Community Burn** — voluntary irreversible supply destruction by any holder; public leaderboard and milestone badges (Ignition 1% / Combustion 5% / Inferno 10% / Supernova 20%)
+The production dashboard reads these sources directly in the browser. The Motoko backend in this repo is retained for local experimentation and bindgen compatibility, but it is not the production source of truth for dashboard data.
 
-The buyback and staking programs together consume **100% of LP fee income** and redirect it back into $MGSN value. Burn adds scarcity pressure at zero protocol cost.
+## Live UX Notes
 
----
+- The dashboard now first paints in a `Loading live data` state instead of pretending fallback data is final.
+- In-flight ICPSwap info requests are deduplicated so the dashboard is less likely to degrade into partial fallback states.
+- If live pool stats are temporarily unavailable, the UI labels that honestly instead of inventing values.
+- Scenario overrides are clearly labeled across all pages.
 
-## Token identifiers
+## Token IDs
 
 | Token | Canister ID |
-|---|---|
+| --- | --- |
 | MGSN | `2rqn6-kiaaa-aaaam-qcuya-cai` |
 | BOB | `7pail-xaaaa-aaaas-aabmq-cai` |
 | ICP | `ryjl3-tyaaa-aaaaa-aaaba-cai` |
 
-ICPSwap swap URL: https://app.icpswap.com/swap?input=ryjl3-tyaaa-aaaaa-aaaba-cai&output=2rqn6-kiaaa-aaaam-qcuya-cai
+ICPSwap swap URL:
 
----
+`https://app.icpswap.com/swap?input=ryjl3-tyaaa-aaaaa-aaaba-cai&output=2rqn6-kiaaa-aaaam-qcuya-cai`
+
+## Current Program Status
+
+### Buyback
+
+- Program page and calculator are live.
+- Auto-indexing of real buyback executions is ready.
+- To unlock live execution logs, publish `VITE_MGSN_BUYBACK_ACCOUNT`.
+- Until then, the page stays in a truthful prelaunch state.
+
+### Staking
+
+- Launch-preview page and estimator are live.
+- To unlock live staking positions and contract-backed lock tiers, publish `VITE_MGSN_STAKING_CANISTER` and its public read interface.
+
+### Burn
+
+- Burn page is fully live from ledger/archive data.
+- Blackhole address is `aaaaa-aa`.
+- Burn totals and burn leaderboard are derived from real on-chain activity.
 
 ## Stack
 
-- **Frontend:** Vite 7.x multi-page app, Chart.js, vanilla JS ES modules
-- **Backend:** Motoko canister (ICP) — legacy sample canister retained for local experimentation
-- **Deploy:** `icp-cli` to ICP asset canister `yezrb-diaaa-aaaah-qugnq-cai`
-- **Live data:** ICPSwap NodeIndex + TokenStorage canister queries, the official ICPSwap info API for spot/pool stats, plus MGSN ledger/archive queries
+- Frontend: Vite 7, vanilla ES modules, Chart.js
+- Backend: Motoko sample canister for local workflows only
+- Deploy target: ICP asset canister `yezrb-diaaa-aaaah-qugnq-cai`
+- Live frontend data path: ICPSwap APIs/canisters plus MGSN ledger/archive queries
 
----
+## Important Files
 
-## Key source files
-
-```
+```text
 src/
-  main.js          — Dashboard (price charts, portfolio tracker, arbitrage, alerts)
-  strategy.js      — Strategy Engine (6-signal score, Kelly sizing, DCA, LP yield)
-  buyback.js       — Buyback Program page
-  staking.js       — Staking Program page (launch-preview APY calculator, tier cards, supply chart)
-  burn.js          — Community Burn page (leaderboard, milestones, impact calculator)
-  demoData.js      — Shared constants: BUYBACK_PROGRAM, STAKING_PROGRAM, BURN_PROGRAM
-  liveData.js      — Live price + pool stat fetchers (ICPSwap, spot APIs)
-  onChainData.js   — MGSN ledger + archive queries (supply, burn history, program status)
-  styles.css       — Shared CSS variables and base styles
+  main.js         Dashboard
+  strategy.js     Strategy page
+  buyback.js      Buyback page
+  staking.js      Staking page
+  burn.js         Burn page
+  siteState.js    Shared scenario studio, cache, data status chips
+  siteChrome.js   Shared top/bottom platform navigation
+  liveData.js     Dashboard and market data aggregation
+  icpswapInfo.js  ICPSwap info API and pool chart helpers
+  onChainData.js  Ledger/archive reads for supply, burns, and program states
+  demoData.js     Shared constants and fallback values
+  styles.css      Shared layout and responsive styles
 
 backend/
-  main.mo          — Legacy Motoko sample canister (no longer used for production dashboard data)
-  backend.did      — Candid interface for bindgen
-
-paper1.txt         — Strategy Engine technical paper
-paper2.txt         — Strategy Engine layman paper
-paper3.txt         — Buyback Program paper
-paper4.txt         — Staking Program paper
-paper5.txt         — Community Burn Program paper
+  main.mo         Legacy sample canister
+  backend.did     Candid interface
 ```
 
----
-
-## Local setup
+## Local Development
 
 1. Install dependencies:
 
-   ```powershell
-   npm install
-   ```
-
-2. **Build the Motoko WASM** (Windows — `mops` requires Linux, use Docker):
-
-   ```powershell
-   docker run --rm -v "${PWD}:/project" -w /project node:22 bash -c 'npm install -g ic-mops 2>/dev/null; mops install 2>/dev/null; MOC=/root/.cache/mops/moc/1.3.0/moc; SOURCES=$(mops sources); $MOC backend/main.mo --omit-metadata candid:service $SOURCES -o backend/backend.wasm'
-   ic-wasm backend/backend.wasm -o backend/backend.wasm metadata candid:service -f backend/backend.did -v public --keep-name-section
-   ```
-
-   On Linux/macOS, `icp deploy` uses the `@dfinity/motoko@v4.1.0` recipe directly.
-
-3. Start project-local ICP network:
-
-   ```powershell
-   icp network start -d
-   ```
-
-4. Deploy both canisters locally:
-
-   ```powershell
-   icp deploy
-   ```
-
-5. Optional: Vite dev server (after backend is deployed):
-
-   ```powershell
-   npm run dev
-   ```
-
----
-
-## Deploy to mainnet
-
 ```powershell
-Push-Location "C:\path\to\MGSN"
-npx vite build
-icp deploy -e ic -y
-Pop-Location
+npm install
 ```
 
----
+2. Optional: rebuild the Motoko backend WASM if `backend/main.mo` changed.
 
-## Optional program addresses
+On Windows, `mops` is easiest through Docker:
 
-If you want the site to auto-index buyback or staking records from public on-chain program addresses, provide these at build time:
+```powershell
+docker run --rm -v "${PWD}:/project" -w /project node:22 bash -c 'npm install -g ic-mops 2>/dev/null; mops install 2>/dev/null; MOC=/root/.cache/mops/moc/1.3.0/moc; SOURCES=$(mops sources); $MOC backend/main.mo --omit-metadata candid:service $SOURCES -o backend/backend.wasm'
+ic-wasm backend/backend.wasm -o backend/backend.wasm metadata candid:service -f backend/backend.did -v public --keep-name-section
+```
 
-- `VITE_MGSN_BUYBACK_ACCOUNT` — dedicated public MGSN buyback vault owner principal
-- `VITE_MGSN_STAKING_CANISTER` — staking canister principal once the contract is published
+3. Start the local ICP network:
 
-When those values are unset, the UI stays in an honest prelaunch state instead of showing placeholder logs. Buyback USD values are estimated from daily ICPSwap pool snapshots until the paired ICP settlement path is published.
+```powershell
+icp network start -d
+```
 
----
+4. Deploy locally:
 
-## Notes
+```powershell
+icp deploy
+```
 
-- The production dashboard now reads ICPSwap directly in the browser; the backend sample canister remains optional.
-- The burn page now reads MGSN ledger archives directly and auto-indexes blackhole transfers plus native ledger burn operations.
-- On Windows, the `@dfinity/motoko` recipe cannot run because `mops toolchain bin moc` requires Linux. The `icp.yaml` uses a custom build step with a pre-built WASM. Rebuild via Docker whenever `backend/main.mo` changes.
-- Canister ID mappings are in `.icp/cache/mappings/local.ids.json` (gitignored). Preserve IDs from `icp canister status backend` if needed across machines.
+5. Run the frontend dev server if needed:
+
+```powershell
+npm run dev
+```
+
+6. Preview a production build locally:
+
+```powershell
+npm run build
+npm run preview
+```
+
+## Mainnet Deploy
+
+Standard path:
+
+```powershell
+npm run build
+icp deploy -e ic -y
+```
+
+If the asset canister hits the known `Failed to list assets` sync problem, use the working fallback:
+
+```powershell
+icp sync frontend -e ic --debug
+```
+
+## Optional Environment Variables
+
+- `VITE_MGSN_BUYBACK_ACCOUNT`
+  Public MGSN buyback vault owner/account for auto-indexing buyback fills
+- `VITE_MGSN_STAKING_CANISTER`
+  Public staking canister principal for live staking state
+
+When these are unset, the UI stays in a truthful prelaunch or launch-preview state instead of showing fake activity.
+
+## Operational Notes
+
+- The repo may contain an untracked `deploy_out_latest.txt` after deployments; it is not part of the app.
+- The production frontend CSP must allow `https://api.icpswap.com` and `https://icp-api.io` for live market data and canister reads.
+- The dashboard caches recent live data in local storage for faster first paint, then refreshes live in the browser.
+- Scenario Studio can intentionally override live prices, volume, and liquidity for demos; those overrides are labeled in the UI.
