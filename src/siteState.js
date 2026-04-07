@@ -178,6 +178,8 @@ export function buildDataStatusHTML({
   const hydrationChip =
     hydration === "live"
       ? sourceChip("live", "Live refresh")
+      : hydration === "loading"
+        ? sourceChip("cache", "Loading live data")
       : hydration === "cached"
         ? sourceChip("cache", "Cached first paint")
         : hydration === "fallback"
@@ -185,7 +187,7 @@ export function buildDataStatusHTML({
           : sourceChip("demo", "Scenario showcase");
 
   const renderedChips = [hydrationChip, ...chips].join("");
-  const updatedLabel = updatedAt != null
+  const updatedLabel = updatedAt != null && hydration !== "loading"
     ? `<span class="studio-status-time">As of ${formatUpdatedAt(updatedAt)}</span>`
     : "";
 
@@ -491,6 +493,10 @@ export function buildDashboardSourceChips(dashboard, scenario, hydration) {
   const chips = [];
   if (dashboard.marketStats?.historyStartLabel) {
     chips.push(sourceChip("live", "ICPSwap history"));
+  } else if (hydration === "loading") {
+    chips.push(sourceChip("cache", "Loading history"));
+  } else if (hydration === "cached") {
+    chips.push(sourceChip("cache", "Refreshing history"));
   } else {
     chips.push(sourceChip("fallback", "Fallback history"));
   }

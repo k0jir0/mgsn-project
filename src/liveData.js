@@ -80,6 +80,8 @@ const tokenStorageActors = new Map();
 let nodeIndexCache = null;
 let dashboardCache = null;
 let poolStatsCache = null;
+let poolStatsInFlight = null;
+let dashboardInFlight = null;
 
 function getTokenStorageActor(canisterId) {
   if (!tokenStorageActors.has(canisterId)) {
@@ -397,59 +399,69 @@ export async function fetchICPSwapPrices(force = false) {
   }
 }
 
-export async function fetchICPSwapPoolStats(force = false) {
+export async function fetchICPSwapPoolStats(force = false, shared = {}) {
   if (!force && isFresh(poolStatsCache, 60_000)) {
     return poolStatsCache.value;
   }
 
-  try {
-    const [snapshot, infoSnapshot] = await Promise.all([
-      fetchNodeIndexSnapshot(force),
-      fetchICPSwapInfoSnapshot(force),
-    ]);
-
-    const mgsnPool = infoSnapshot.mgsnIcpPool ?? null;
-    const [bobResult, poolChartResult] = await Promise.allSettled([
-      fetchTokenStorageSeries(snapshot.bobStorageCanister, snapshot.bobCanister),
-      mgsnPool ? fetchPoolChartDaily(mgsnPool.poolId, { limit: 400, force }) : Promise.resolve([]),
-    ]);
-
-    const bobSeries =
-      bobResult.status === "fulfilled" ? bobResult.value : { prices: [], volume: [] };
-    const mgsnPoolChart =
-      poolChartResult.status === "fulfilled" ? poolChartResult.value : [];
-
-    const value = {
-      mgsnVol24h:
-        mgsnPool?.volumeUSD24H ??
-        infoSnapshot.mgsnToken?.volumeUSD24H ??
-        asNumber(snapshot.mgsn?.volumeUSD1d),
-      bobVol24h:
-        infoSnapshot.bobToken?.volumeUSD24H ?? asNumber(snapshot.bob?.volumeUSD1d),
-      mgsnVol30d:
-        sumRecentPoolVolume(mgsnPoolChart, 30) ??
-        (infoSnapshot.mgsnToken?.volumeUSD7D != null
-          ? infoSnapshot.mgsnToken.volumeUSD7D * (30 / 7)
-          : null) ??
-        null,
-      bobVol30d:
-        sumRecentVolume(bobSeries.volume, 30) ??
-        (infoSnapshot.bobToken?.volumeUSD7D != null
-          ? infoSnapshot.bobToken.volumeUSD7D * (30 / 7)
-          : null),
-      mgsnLiq: mgsnPool?.tvlUSD ?? infoSnapshot.mgsnToken?.tvlUSD ?? null,
-      bobLiq: null,
-      mgsnPoolId: mgsnPool?.poolId ?? null,
-      mgsnPoolChart,
-      mgsnStorageCanister: snapshot.mgsnStorageCanister,
-      bobStorageCanister: snapshot.bobStorageCanister,
-    };
-
-    poolStatsCache = { ts: Date.now(), value };
-    return value;
-  } catch {
-    return {};
+  if (poolStatsInFlight) {
+    return poolStatsInFlight;
   }
+
+  poolStatsInFlight = (async () => {
+    try {
+      const snapshot = shared.snapshot ?? await fetchNodeIndexSnapshot(force);
+      const infoSnapshot = shared.infoSnapshot ?? await fetchICPSwapInfoSnapshot(force);
+
+      const mgsnPool = infoSnapshot.mgsnIcpPool ?? null;
+      const [bobResult, poolChartResult] = await Promise.allSettled([
+        fetchTokenStorageSeries(snapshot.bobStorageCanister, snapshot.bobCanister),
+        mgsnPool
+          ? fetchPoolChartDaily(mgsnPool.poolId, { limit: 400, force })
+          : Promise.resolve([]),
+      ]);
+
+      const bobSeries =
+        bobResult.status === "fulfilled" ? bobResult.value : { prices: [], volume: [] };
+      const mgsnPoolChart =
+        poolChartResult.status === "fulfilled" ? poolChartResult.value : [];
+
+      const value = {
+        mgsnVol24h:
+          mgsnPool?.volumeUSD24H ??
+          infoSnapshot.mgsnToken?.volumeUSD24H ??
+          asNumber(snapshot.mgsn?.volumeUSD1d),
+        bobVol24h:
+          infoSnapshot.bobToken?.volumeUSD24H ?? asNumber(snapshot.bob?.volumeUSD1d),
+        mgsnVol30d:
+          sumRecentPoolVolume(mgsnPoolChart, 30) ??
+          (infoSnapshot.mgsnToken?.volumeUSD7D != null
+            ? infoSnapshot.mgsnToken.volumeUSD7D * (30 / 7)
+            : null) ??
+          null,
+        bobVol30d:
+          sumRecentVolume(bobSeries.volume, 30) ??
+          (infoSnapshot.bobToken?.volumeUSD7D != null
+            ? infoSnapshot.bobToken.volumeUSD7D * (30 / 7)
+            : null),
+        mgsnLiq: mgsnPool?.tvlUSD ?? infoSnapshot.mgsnToken?.tvlUSD ?? null,
+        bobLiq: null,
+        mgsnPoolId: mgsnPool?.poolId ?? null,
+        mgsnPoolChart,
+        mgsnStorageCanister: snapshot.mgsnStorageCanister,
+        bobStorageCanister: snapshot.bobStorageCanister,
+      };
+
+      poolStatsCache = { ts: Date.now(), value };
+      return value;
+    } catch {
+      return {};
+    } finally {
+      poolStatsInFlight = null;
+    }
+  })();
+
+  return poolStatsInFlight;
 }
 
 export async function fetchDashboardData(force = false) {
@@ -457,34 +469,44 @@ export async function fetchDashboardData(force = false) {
     return dashboardCache.value;
   }
 
-  try {
-    const [snapshot, infoSnapshot, poolStats, ledgerSnapshot] = await Promise.all([
-      fetchNodeIndexSnapshot(force),
-      fetchICPSwapInfoSnapshot(force),
-      fetchICPSwapPoolStats(force),
-      fetchMgsnLedgerSnapshot(force),
-    ]);
-
-    const [mgsnSeries, bobSeries] = await Promise.all([
-      fetchTokenStorageSeries(snapshot.mgsnStorageCanister, snapshot.mgsnCanister),
-      fetchTokenStorageSeries(snapshot.bobStorageCanister, snapshot.bobCanister),
-    ]);
-
-    const dashboard = buildDashboard({
-      icpUsd: infoSnapshot.icpUsd ?? null,
-      snapshot,
-      infoSnapshot,
-      mgsnSeries,
-      bobSeries,
-      poolStats,
-      ledgerSnapshot,
-    });
-
-    if (!dashboard) return null;
-
-    dashboardCache = { ts: Date.now(), value: dashboard };
-    return dashboard;
-  } catch {
-    return null;
+  if (dashboardInFlight) {
+    return dashboardInFlight;
   }
+
+  dashboardInFlight = (async () => {
+    try {
+      const [snapshot, infoSnapshot, ledgerSnapshot] = await Promise.all([
+        fetchNodeIndexSnapshot(force),
+        fetchICPSwapInfoSnapshot(force),
+        fetchMgsnLedgerSnapshot(force),
+      ]);
+
+      const [poolStats, mgsnSeries, bobSeries] = await Promise.all([
+        fetchICPSwapPoolStats(force, { snapshot, infoSnapshot }),
+        fetchTokenStorageSeries(snapshot.mgsnStorageCanister, snapshot.mgsnCanister),
+        fetchTokenStorageSeries(snapshot.bobStorageCanister, snapshot.bobCanister),
+      ]);
+
+      const dashboard = buildDashboard({
+        icpUsd: infoSnapshot.icpUsd ?? null,
+        snapshot,
+        infoSnapshot,
+        mgsnSeries,
+        bobSeries,
+        poolStats,
+        ledgerSnapshot,
+      });
+
+      if (!dashboard) return null;
+
+      dashboardCache = { ts: Date.now(), value: dashboard };
+      return dashboard;
+    } catch {
+      return null;
+    } finally {
+      dashboardInFlight = null;
+    }
+  })();
+
+  return dashboardInFlight;
 }

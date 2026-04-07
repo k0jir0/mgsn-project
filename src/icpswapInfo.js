@@ -1,11 +1,12 @@
 import { TOKEN_CANISTERS } from "./demoData.js";
 
 const ICPSWAP_INFO_ROOT = "https://api.icpswap.com/info";
-const REQUEST_TIMEOUT_MS = 8_000;
+const REQUEST_TIMEOUT_MS = 15_000;
 const SNAPSHOT_CACHE_MS = 60_000;
 const CHART_CACHE_MS = 5 * 60_000;
 
 let infoSnapshotCache = null;
+let infoSnapshotInFlight = null;
 const poolChartCache = new Map();
 
 function isFresh(cache, maxAgeMs) {
@@ -123,53 +124,76 @@ export async function fetchICPSwapInfoSnapshot(force = false) {
     return infoSnapshotCache.value;
   }
 
-  const [tokensJson, poolsJson] = await Promise.all([
-    fetchJson(`${ICPSWAP_INFO_ROOT}/token/all`),
-    fetchJson(`${ICPSWAP_INFO_ROOT}/pool/all`),
-  ]);
+  if (infoSnapshotInFlight) {
+    return infoSnapshotInFlight;
+  }
 
-  const tokens = Array.isArray(tokensJson?.data)
-    ? tokensJson.data.map(normalizeToken)
-    : [];
-  const pools = Array.isArray(poolsJson?.data)
-    ? poolsJson.data.map(normalizePool)
-    : [];
+  infoSnapshotInFlight = (async () => {
+    const [tokensResult, poolsResult] = await Promise.allSettled([
+      fetchJson(`${ICPSWAP_INFO_ROOT}/token/all`),
+      fetchJson(`${ICPSWAP_INFO_ROOT}/pool/all`),
+    ]);
 
-  const mgsnToken = findToken(tokens, {
-    ledgerId: TOKEN_CANISTERS.MGSN,
-    symbol: "MGSN",
-  });
-  const bobToken = findToken(tokens, {
-    ledgerId: TOKEN_CANISTERS.BOB,
-    symbol: "BOB",
-  });
-  const icpToken = findToken(tokens, {
-    ledgerId: TOKEN_CANISTERS.ICP,
-    name: "Internet Computer",
-    symbol: "ICP",
-  });
+    if (
+      tokensResult.status !== "fulfilled" &&
+      poolsResult.status !== "fulfilled"
+    ) {
+      throw new Error("ICPSwap info snapshot unavailable");
+    }
 
-  const mgsnIcpPool =
-    pools
-      .filter((pool) => isPoolMatch(pool, TOKEN_CANISTERS.MGSN, TOKEN_CANISTERS.ICP))
-      .sort((a, b) => (b.tvlUSD ?? 0) - (a.tvlUSD ?? 0))[0] ?? null;
+    const tokens =
+      tokensResult.status === "fulfilled" && Array.isArray(tokensResult.value?.data)
+        ? tokensResult.value.data.map(normalizeToken)
+        : [];
+    const pools =
+      poolsResult.status === "fulfilled" && Array.isArray(poolsResult.value?.data)
+        ? poolsResult.value.data.map(normalizePool)
+        : [];
 
-  const value = {
-    fetchedAt: Date.now(),
-    tokens,
-    pools,
-    mgsnToken,
-    bobToken,
-    icpToken,
-    mgsnIcpPool,
-    totalPairs: pools.length,
-    mgsnUsd: mgsnToken?.price ?? null,
-    bobUsd: bobToken?.price ?? null,
-    icpUsd: icpToken?.price ?? null,
-  };
+    const mgsnToken = findToken(tokens, {
+      ledgerId: TOKEN_CANISTERS.MGSN,
+      symbol: "MGSN",
+    });
+    const bobToken = findToken(tokens, {
+      ledgerId: TOKEN_CANISTERS.BOB,
+      symbol: "BOB",
+    });
+    const icpToken = findToken(tokens, {
+      ledgerId: TOKEN_CANISTERS.ICP,
+      name: "Internet Computer",
+      symbol: "ICP",
+    });
 
-  infoSnapshotCache = { ts: Date.now(), value };
-  return value;
+    const mgsnIcpPool =
+      pools
+        .filter((pool) => isPoolMatch(pool, TOKEN_CANISTERS.MGSN, TOKEN_CANISTERS.ICP))
+        .sort((a, b) => (b.tvlUSD ?? 0) - (a.tvlUSD ?? 0))[0] ?? null;
+
+    const value = {
+      fetchedAt: Date.now(),
+      tokens,
+      pools,
+      mgsnToken,
+      bobToken,
+      icpToken,
+      mgsnIcpPool,
+      totalPairs: pools.length || null,
+      mgsnUsd: mgsnToken?.price ?? null,
+      bobUsd: bobToken?.price ?? null,
+      icpUsd: icpToken?.price ?? null,
+      tokensAvailable: tokensResult.status === "fulfilled",
+      poolsAvailable: poolsResult.status === "fulfilled",
+    };
+
+    infoSnapshotCache = { ts: Date.now(), value };
+    return value;
+  })();
+
+  try {
+    return await infoSnapshotInFlight;
+  } finally {
+    infoSnapshotInFlight = null;
+  }
 }
 
 export async function fetchPoolChartDaily(

@@ -670,7 +670,12 @@ function panelStatsFooter(chips) {
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-function buildSidebarHTML(dashboard) {
+function isHydratingDashboard(hydrationMode) {
+  return hydrationMode === "loading" || hydrationMode === "cached";
+}
+
+function buildSidebarHTML(dashboard, hydrationMode = "live") {
+  const hydratingLive = isHydratingDashboard(hydrationMode);
   const toggles = PANELS.map((p) => `
     <label class="toggle-item">
       <input type="checkbox" data-panel="${p.id}"${state.visible.has(p.id) ? " checked" : ""}>
@@ -679,10 +684,14 @@ function buildSidebarHTML(dashboard) {
     </label>`).join("");
   const historyLine = dashboard.marketStats?.historyStartLabel
     ? `History: ${dashboard.marketStats.historyStartLabel} - ${dashboard.marketStats.historyEndLabel}`
-    : "History: fallback snapshot";
+    : hydratingLive
+      ? "History: loading ICPSwap history..."
+      : "History: fallback snapshot";
   const statsLine = dashboard.marketStats?.mgsnVol24h != null || dashboard.marketStats?.bobVol24h != null
     ? `24h volume: BOB ${fmtMaybeMoney(dashboard.marketStats?.bobVol24h)} · MGSN ${fmtMaybeMoney(dashboard.marketStats?.mgsnVol24h)}`
-    : "Live token stats unavailable";
+    : hydratingLive
+      ? "Refreshing live token stats..."
+      : "Live token stats unavailable";
 
   return `
     <nav class="sidebar" id="sidebar">
@@ -734,7 +743,8 @@ function buildSidebarHTML(dashboard) {
 
 // ── Main Content ──────────────────────────────────────────────────────────────
 
-function buildMainHTML(dashboard, m, scenarioHeaderHtml) {
+function buildMainHTML(dashboard, m, scenarioHeaderHtml, hydrationMode = "live") {
+  const hydratingLive = isHydratingDashboard(hydrationMode);
   const changeClass = m.unrealisedPct >= 0 ? "positive" : "negative";
   const changeArrow = m.unrealisedPct >= 0 ? "▲" : "▼";
   const pnlSign     = m.unrealisedPct >= 0 ? "+" : "";
@@ -745,10 +755,14 @@ function buildMainHTML(dashboard, m, scenarioHeaderHtml) {
 
   const historySummary = dashboard.marketStats?.historyStartLabel
     ? `${dashboard.marketStats.historyStartLabel} - ${dashboard.marketStats.historyEndLabel} monthly closes + live spot`
-    : "Fallback snapshot";
+    : hydratingLive
+      ? "Loading ICPSwap history and live spot..."
+      : "Fallback snapshot";
   const volatilitySource = dashboard.marketStats?.historyStartLabel
     ? "ICPSwap monthly OHLC history"
-    : "Fallback snapshot";
+    : hydratingLive
+      ? "Loading live ICPSwap history"
+      : "Fallback snapshot";
   const volumeChips = [
     { label: "BOB 24h vol", value: fmtMaybeMoney(dashboard.marketStats?.bobVol24h), cls: "bob" },
     { label: "MGSN 24h vol", value: fmtMaybeMoney(dashboard.marketStats?.mgsnVol24h), cls: "mgsn" },
@@ -1016,14 +1030,15 @@ function render(app, dashboard, hydrationMode = "live") {
       mobileActions: [{ id: "mobile-menu-btn", label: "Charts", ariaExpanded: false }],
     }) +
     `<div class="page-body">
-       ${buildSidebarHTML(displayDashboard)}
+       ${buildSidebarHTML(displayDashboard, hydrationMode)}
        ${buildMainHTML(
          displayDashboard,
          m,
          buildScenarioHeaderHTML(
            "dashboard",
            buildDashboardSourceChips(displayDashboard, scenario, hydrationMode)
-         )
+         ),
+         hydrationMode
        )}
      </div>`;
   attachEvents(app, displayDashboard);
@@ -1047,7 +1062,7 @@ async function bootstrap() {
   }
 
   try {
-    render(app, dashboard, cachedDashboard ? "cached" : "fallback");
+    render(app, dashboard, cachedDashboard ? "cached" : "loading");
   } catch (e) {
     app.innerHTML = `<pre style="color:#ef4444;padding:20px;background:#0f1120;font-size:12px;white-space:pre-wrap">${e}</pre>`;
     return;
@@ -1061,6 +1076,8 @@ async function bootstrap() {
       ? dashboard.timeline.at(-1)?.icpPrice ?? state.liveIcpUsd
       : state.liveIcpUsd;
     render(app, dashboard, "live");
+  } else if (!cachedDashboard) {
+    render(app, dashboard, "fallback");
   }
 
   setInterval(async () => {
