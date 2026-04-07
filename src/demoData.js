@@ -23,7 +23,7 @@ export const PROGRAM_ADDRESSES = {
 // ICPSwap info overview snapshot (Apr 6 2026):
 // ICP = $2.33 | BOB = $0.268 | MGSN = $0.0000140
 //
-// ICP/USD prices: Binance (Jul 2024–Mar 2025) + CoinGecko (Apr 2025–Apr 2026) — REAL
+// ICP/USD prices: Binance (Jul 2024–Mar 2025) + ICPSwap snapshots (Apr 2025–Apr 2026) — REAL
 // BOB/USD prices: ICPSwap TokenStorage canister (Sep 2024–Aug 2025) — REAL
 // BOB volume/liquidity: ICPSwap TokenStorage daily aggregates — REAL
 // MGSN/USD: fallback snapshot only. Live history is fetched at runtime from ICPSwap
@@ -33,7 +33,7 @@ export const demoDashboard = {
   heroNote:
     "Static fallback snapshot used only when live ICPSwap queries are unavailable.",
   dataSource:
-    "Fallback snapshot: ICP prices from Binance/CoinGecko. BOB prices/volume from ICPSwap storage. Live pages prefer direct ICPSwap canister queries.",
+    "Fallback snapshot: ICP prices from Binance and ICPSwap snapshots. BOB prices/volume from ICPSwap storage. Live pages prefer direct ICPSwap canister and official API queries.",
   updatedAt: BigInt(Date.parse("2026-04-06T09:00:00Z") * 1_000_000),
   // Circulating supply (approximate)
   bobSupply:  210_000_000,
@@ -43,7 +43,7 @@ export const demoDashboard = {
   icpswapVolume: 637_030_000,
   icpswapPairs:  1_951,
   // Monthly timeline — Jul 2024 → Apr 2026 (22 points)
-  // ICP: real from Binance/CoinGecko | BOB: real from ICPSwap (Sep'24–Aug'25) | MGSN: current price flat
+  // ICP: real from Binance/ICPSwap snapshots | BOB: real from ICPSwap (Sep'24–Aug'25) | MGSN: current price flat
   timeline: [
     { period: "Jul 2024", date: "2024-07-01", icpPrice: 8.9580, bobPrice: 0.02757700, mgsnPrice: 0.00001398, bobVolume:       0, mgsnVolume: 0, bobLiquidity:        0, mgsnLiquidity: 0 },
     { period: "Aug 2024", date: "2024-08-01", icpPrice: 7.5630, bobPrice: 0.02757700, mgsnPrice: 0.00001398, bobVolume:       0, mgsnVolume: 0, bobLiquidity:        0, mgsnLiquidity: 0 },

@@ -1,10 +1,13 @@
 import { Actor, HttpAgent } from "@dfinity/agent";
 import { IDL } from "@dfinity/candid";
 import { demoDashboard } from "./demoData.js";
+import {
+  asNumber,
+  fetchICPSwapInfoSnapshot,
+  fetchPoolChartDaily,
+  sumRecentPoolVolume,
+} from "./icpswapInfo.js";
 import { fetchMgsnLedgerSnapshot } from "./onChainData.js";
-
-const COINGECKO_URL =
-  "https://api.coingecko.com/api/v3/simple/price?ids=internet-computer&vs_currencies=usd";
 
 const IC_API_HOST = "https://icp-api.io";
 const NODE_INDEX_CANISTER = "ggzvv-5qaaa-aaaag-qck7a-cai";
@@ -108,14 +111,13 @@ function isFresh(cache, maxAgeMs) {
   return cache && Date.now() - cache.ts < maxAgeMs;
 }
 
-function asNumber(value) {
-  if (value == null) return null;
-  const num = typeof value === "bigint" ? Number(value) : Number(value);
-  return Number.isFinite(num) ? num : null;
-}
-
 function monthKeyFromSeconds(seconds) {
   const d = new Date(seconds * 1000);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthKeyFromMillis(millis) {
+  const d = new Date(millis);
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
@@ -168,6 +170,24 @@ function aggregateMonthlyVolume(points) {
   for (const point of points) {
     const key = monthKeyFromSeconds(point.timestamp);
     monthly.set(key, (monthly.get(key) ?? 0) + (asNumber(point.volumeUSD) ?? 0));
+  }
+  return monthly;
+}
+
+function aggregateMonthlyPoolLast(points, accessor) {
+  const monthly = new Map();
+  for (const point of points) {
+    const key = monthKeyFromMillis(point.beginTime ?? point.endTime ?? 0);
+    monthly.set(key, accessor(point));
+  }
+  return monthly;
+}
+
+function aggregateMonthlyPoolSum(points, accessor) {
+  const monthly = new Map();
+  for (const point of points) {
+    const key = monthKeyFromMillis(point.beginTime ?? point.endTime ?? 0);
+    monthly.set(key, (monthly.get(key) ?? 0) + (accessor(point) ?? 0));
   }
   return monthly;
 }
@@ -241,7 +261,7 @@ async function fetchTokenStorageSeries(storageCanister, tokenCanister) {
   return { prices, volume };
 }
 
-function buildLivePoint({ icpUsd, snapshot, poolStats, fallbackLast }) {
+function buildLivePoint({ icpUsd, snapshot, poolStats, infoSnapshot, fallbackLast }) {
   const now = new Date();
   const date = now.toISOString().slice(0, 10);
 
@@ -249,18 +269,27 @@ function buildLivePoint({ icpUsd, snapshot, poolStats, fallbackLast }) {
     period: "Live",
     date,
     icpPrice: icpUsd ?? fallbackLast?.icpPrice ?? demoDashboard.timeline.at(-1)?.icpPrice ?? 0,
-    bobPrice: asNumber(snapshot.bob?.priceUSD) ?? fallbackLast?.bobPrice ?? 0,
-    mgsnPrice: asNumber(snapshot.mgsn?.priceUSD) ?? fallbackLast?.mgsnPrice ?? 0,
+    bobPrice:
+      infoSnapshot?.bobUsd ??
+      asNumber(snapshot.bob?.priceUSD) ??
+      fallbackLast?.bobPrice ??
+      0,
+    mgsnPrice:
+      infoSnapshot?.mgsnUsd ??
+      asNumber(snapshot.mgsn?.priceUSD) ??
+      fallbackLast?.mgsnPrice ??
+      0,
     bobVolume: poolStats.bobVol24h ?? 0,
     mgsnVolume: poolStats.mgsnVol24h ?? 0,
-    bobLiquidity: null,
-    mgsnLiquidity: null,
+    bobLiquidity: poolStats.bobLiq ?? null,
+    mgsnLiquidity: poolStats.mgsnLiq ?? null,
   };
 }
 
 function buildDashboard({
   icpUsd,
   snapshot,
+  infoSnapshot,
   mgsnSeries,
   bobSeries,
   poolStats,
@@ -270,6 +299,14 @@ function buildDashboard({
   const bobMonthlyPrices = aggregateMonthlyClose(bobSeries.prices);
   const mgsnMonthlyVolume = aggregateMonthlyVolume(mgsnSeries.volume);
   const bobMonthlyVolume = aggregateMonthlyVolume(bobSeries.volume);
+  const poolMonthlyVolume = aggregateMonthlyPoolSum(
+    poolStats.mgsnPoolChart ?? [],
+    (point) => point.volumeUSD ?? 0
+  );
+  const poolMonthlyLiquidity = aggregateMonthlyPoolLast(
+    poolStats.mgsnPoolChart ?? [],
+    (point) => point.tvlUSD ?? null
+  );
 
   const overlappingMonths = [...mgsnMonthlyPrices.keys()]
     .filter((key) => bobMonthlyPrices.has(key))
@@ -286,19 +323,21 @@ function buildDashboard({
     bobPrice: bobMonthlyPrices.get(key),
     mgsnPrice: mgsnMonthlyPrices.get(key),
     bobVolume: bobMonthlyVolume.get(key) ?? 0,
-    mgsnVolume: mgsnMonthlyVolume.get(key) ?? 0,
+    mgsnVolume: poolMonthlyVolume.get(key) ?? mgsnMonthlyVolume.get(key) ?? 0,
     bobLiquidity: null,
-    mgsnLiquidity: null,
+    mgsnLiquidity: poolMonthlyLiquidity.get(key) ?? null,
   }));
 
   const timeline = [...historyTimeline];
-  const livePoint = buildLivePoint({
-    icpUsd,
-    snapshot,
-    poolStats,
-    fallbackLast: historyTimeline.at(-1),
-  });
-  timeline.push(livePoint);
+  timeline.push(
+    buildLivePoint({
+      icpUsd,
+      snapshot,
+      poolStats,
+      infoSnapshot,
+      fallbackLast: historyTimeline.at(-1),
+    })
+  );
 
   const startLabel = historyTimeline[0].period;
   const endLabel = historyTimeline.at(-1).period;
@@ -306,11 +345,11 @@ function buildDashboard({
   return {
     ...demoDashboard,
     title: "MGSN Strategy Tracker",
-    subtitle: "Live ICPSwap spot data with on-chain monthly closes for MGSN and BOB.",
+    subtitle: "Live ICPSwap spot, pool, and ledger data for MGSN and BOB.",
     heroNote:
-      "Dashboard metrics now prefer ICPSwap canister data directly. Historical charts use overlapping monthly closes from token storage plus a current live spot point.",
+      "Dashboard metrics now use ICPSwap spot, pool TVL, and pool-volume data directly. Historical charts still use overlapping monthly token-storage closes, plus a live spot point.",
     dataSource:
-      "MGSN/BOB spot and token stats from ICPSwap NodeIndex. Daily OHLC and volume from ICPSwap TokenStorage, aggregated monthly. ICP spot from CoinGecko.",
+      "Spot prices, token TVL, and pair stats from the official ICPSwap info API. Daily OHLC and token volume from ICPSwap TokenStorage canisters. Burn supply from the MGSN ledger.",
     updatedAt: BigInt(Date.now()) * 1_000_000n,
     mgsnSupply: ledgerSnapshot?.currentSupply ?? demoDashboard.mgsnSupply,
     timeline,
@@ -322,27 +361,19 @@ function buildDashboard({
       bobVol24h: poolStats.bobVol24h,
       mgsnVol30d: poolStats.mgsnVol30d,
       bobVol30d: poolStats.bobVol30d,
-      totalLiquidityUsd: null,
-      totalPairs: null,
+      totalLiquidityUsd: poolStats.mgsnLiq ?? null,
+      totalPairs: infoSnapshot?.totalPairs ?? null,
       mgsnCanister: snapshot.mgsnCanister,
       bobCanister: snapshot.bobCanister,
+      mgsnPoolId: poolStats.mgsnPoolId ?? null,
     },
   };
 }
 
-export async function fetchLiveSpotPrices() {
+export async function fetchLiveSpotPrices(force = false) {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6_000);
-    const res = await fetch(COINGECKO_URL, {
-      signal: controller.signal,
-      headers: { Accept: "application/json" },
-    });
-    clearTimeout(timer);
-    if (!res.ok) return {};
-    const json = await res.json();
-    const icpUsd = json?.["internet-computer"]?.usd ?? null;
-    return { icpUsd };
+    const infoSnapshot = await fetchICPSwapInfoSnapshot(force);
+    return { icpUsd: infoSnapshot.icpUsd ?? null };
   } catch {
     return {};
   }
@@ -350,10 +381,14 @@ export async function fetchLiveSpotPrices() {
 
 export async function fetchICPSwapPrices(force = false) {
   try {
-    const snapshot = await fetchNodeIndexSnapshot(force);
+    const [snapshot, infoSnapshot] = await Promise.all([
+      fetchNodeIndexSnapshot(force),
+      fetchICPSwapInfoSnapshot(force),
+    ]);
+
     return {
-      mgsnUsd: asNumber(snapshot.mgsn?.priceUSD),
-      bobUsd: asNumber(snapshot.bob?.priceUSD),
+      mgsnUsd: infoSnapshot.mgsnUsd ?? asNumber(snapshot.mgsn?.priceUSD),
+      bobUsd: infoSnapshot.bobUsd ?? asNumber(snapshot.bob?.priceUSD),
       mgsnCanister: snapshot.mgsnCanister,
       bobCanister: snapshot.bobCanister,
     };
@@ -368,21 +403,44 @@ export async function fetchICPSwapPoolStats(force = false) {
   }
 
   try {
-    const snapshot = await fetchNodeIndexSnapshot(force);
-    const [mgsnResult, bobResult] = await Promise.allSettled([
-      fetchTokenStorageSeries(snapshot.mgsnStorageCanister, snapshot.mgsnCanister),
-      fetchTokenStorageSeries(snapshot.bobStorageCanister, snapshot.bobCanister),
+    const [snapshot, infoSnapshot] = await Promise.all([
+      fetchNodeIndexSnapshot(force),
+      fetchICPSwapInfoSnapshot(force),
     ]);
-    const mgsnSeries = mgsnResult.status === "fulfilled" ? mgsnResult.value : { prices: [], volume: [] };
-    const bobSeries = bobResult.status === "fulfilled" ? bobResult.value : { prices: [], volume: [] };
+
+    const mgsnPool = infoSnapshot.mgsnIcpPool ?? null;
+    const [bobResult, poolChartResult] = await Promise.allSettled([
+      fetchTokenStorageSeries(snapshot.bobStorageCanister, snapshot.bobCanister),
+      mgsnPool ? fetchPoolChartDaily(mgsnPool.poolId, { limit: 400, force }) : Promise.resolve([]),
+    ]);
+
+    const bobSeries =
+      bobResult.status === "fulfilled" ? bobResult.value : { prices: [], volume: [] };
+    const mgsnPoolChart =
+      poolChartResult.status === "fulfilled" ? poolChartResult.value : [];
 
     const value = {
-      mgsnVol24h: asNumber(snapshot.mgsn?.volumeUSD1d),
-      bobVol24h: asNumber(snapshot.bob?.volumeUSD1d),
-      mgsnVol30d: sumRecentVolume(mgsnSeries.volume, 30),
-      bobVol30d: sumRecentVolume(bobSeries.volume, 30),
-      mgsnLiq: null,
+      mgsnVol24h:
+        mgsnPool?.volumeUSD24H ??
+        infoSnapshot.mgsnToken?.volumeUSD24H ??
+        asNumber(snapshot.mgsn?.volumeUSD1d),
+      bobVol24h:
+        infoSnapshot.bobToken?.volumeUSD24H ?? asNumber(snapshot.bob?.volumeUSD1d),
+      mgsnVol30d:
+        sumRecentPoolVolume(mgsnPoolChart, 30) ??
+        (infoSnapshot.mgsnToken?.volumeUSD7D != null
+          ? infoSnapshot.mgsnToken.volumeUSD7D * (30 / 7)
+          : null) ??
+        null,
+      bobVol30d:
+        sumRecentVolume(bobSeries.volume, 30) ??
+        (infoSnapshot.bobToken?.volumeUSD7D != null
+          ? infoSnapshot.bobToken.volumeUSD7D * (30 / 7)
+          : null),
+      mgsnLiq: mgsnPool?.tvlUSD ?? infoSnapshot.mgsnToken?.tvlUSD ?? null,
       bobLiq: null,
+      mgsnPoolId: mgsnPool?.poolId ?? null,
+      mgsnPoolChart,
       mgsnStorageCanister: snapshot.mgsnStorageCanister,
       bobStorageCanister: snapshot.bobStorageCanister,
     };
@@ -400,9 +458,9 @@ export async function fetchDashboardData(force = false) {
   }
 
   try {
-    const [spot, snapshot, poolStats, ledgerSnapshot] = await Promise.all([
-      fetchLiveSpotPrices(),
+    const [snapshot, infoSnapshot, poolStats, ledgerSnapshot] = await Promise.all([
       fetchNodeIndexSnapshot(force),
+      fetchICPSwapInfoSnapshot(force),
       fetchICPSwapPoolStats(force),
       fetchMgsnLedgerSnapshot(force),
     ]);
@@ -413,8 +471,9 @@ export async function fetchDashboardData(force = false) {
     ]);
 
     const dashboard = buildDashboard({
-      icpUsd: spot.icpUsd ?? null,
+      icpUsd: infoSnapshot.icpUsd ?? null,
       snapshot,
+      infoSnapshot,
       mgsnSeries,
       bobSeries,
       poolStats,

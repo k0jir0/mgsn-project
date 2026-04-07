@@ -279,10 +279,10 @@ function buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState, scenar
   const floatReduction  = metrics.pctSupply;
   const statusBanner = stakingState?.status === "simulated"
     ? `Scenario Studio showcase is active. These staking positions are simulated so the full reward and lock-tier UX can be demonstrated before the public canister is published.`
-    : stakingState?.status === "unconfigured"
-    ? `No public staking canister is configured yet. This page will switch from projected positions to real on-chain positions automatically once the contract is published.`
-    : stakingState?.status === "pending_interface"
-      ? `A staking canister ID is configured, but the public position interface still needs to be wired before lock tiers and unlock dates can be read here.`
+    : stakingState?.status === "prelaunch"
+    ? `Staking is still in launch-preview mode. Live reward assumptions are available already, and the page will upgrade to real on-chain positions once the public staking contract is published.`
+    : stakingState?.status === "configured"
+      ? `A public staking canister is configured. Publish its position methods and this page can switch from launch-preview projections to live lock tiers and unlock dates.`
       : `Staking positions are coming directly from the on-chain program.`;
 
   return `
@@ -771,12 +771,12 @@ bootstrap();
 
 function fallbackStakingState() {
   return {
-    status: "unconfigured",
+    status: "prelaunch",
     currentSupply: demoDashboard.mgsnSupply,
     positions: [],
     totalLocked: 0,
     totalWeight: 0,
-    note: "No public staking canister is configured yet.",
+    note: "The staking contract has not been published yet.",
   };
 }
 

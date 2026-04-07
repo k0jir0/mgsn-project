@@ -430,6 +430,7 @@ export function buildSimulatedBuybackState(
   const log = Array.from({ length: count }, (_, index) => ({
     date: isoDateMonthsAgo(count - index),
     usdSpent: usdPerBuyback,
+    usdBasis: "simulated",
     mgsnAcquired: usdPerBuyback / tokenPrice,
     txId: "",
     note: index === count - 1 ? "Scenario Studio showcase execution" : "Projected monthly buyback",
@@ -509,6 +510,9 @@ export function buildBuybackSourceChips(buybackState, scenario, hydration) {
   if (buybackState?.status === "simulated") chips.push(sourceChip("demo", "Simulated buyback log"));
   else if (buybackState?.status === "unconfigured") chips.push(sourceChip("projected", "Vault not published"));
   else chips.push(sourceChip("live", "On-chain ledger scan"));
+  if ((buybackState?.log ?? []).some((entry) => entry.usdBasis === "estimated_pool_snapshot")) {
+    chips.push(sourceChip("projected", "USD valued from pool snapshots"));
+  }
   if (scenario.monthlyVolumeUsd != null || scenario.poolLiquidityUsd != null) {
     chips.push(sourceChip("projected", "Scenario overrides"));
   }
@@ -522,8 +526,8 @@ export function buildBuybackSourceChips(buybackState, scenario, hydration) {
 export function buildStakingSourceChips(stakingState, scenario, hydration) {
   const chips = [];
   if (stakingState?.status === "simulated") chips.push(sourceChip("demo", "Simulated staking book"));
-  else if (stakingState?.status === "pending_interface") chips.push(sourceChip("projected", "Interface pending"));
-  else if (stakingState?.status === "unconfigured") chips.push(sourceChip("projected", "Canister not published"));
+  else if (stakingState?.status === "configured") chips.push(sourceChip("projected", "Canister published"));
+  else if (stakingState?.status === "prelaunch") chips.push(sourceChip("projected", "Launch preview"));
   else chips.push(sourceChip("live", "On-chain staking state"));
   if (scenario.monthlyVolumeUsd != null || scenario.poolLiquidityUsd != null) {
     chips.push(sourceChip("projected", "Scenario overrides"));

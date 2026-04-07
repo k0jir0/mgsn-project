@@ -2,6 +2,12 @@ import { Actor, HttpAgent } from "@dfinity/agent";
 import { IDL } from "@dfinity/candid";
 import { Principal } from "@dfinity/principal";
 import { PROGRAM_ADDRESSES, TOKEN_CANISTERS } from "./demoData.js";
+import {
+  fetchICPSwapInfoSnapshot,
+  fetchPoolChartDaily,
+  getPoolSnapshotForDate,
+  getPoolTokenUsdPrice,
+} from "./icpswapInfo.js";
 
 const IC_API_HOST = "https://icp-api.io";
 const MGSN_LEDGER_CANISTER = TOKEN_CANISTERS.MGSN;
@@ -172,6 +178,24 @@ function txDate(timestampNs) {
 
 function accountOwner(account) {
   return account?.owner?.toText?.() ?? "";
+}
+
+function estimateBuybackUsdSpent(mgsnAcquired, date, poolChart) {
+  const poolSnapshot = getPoolSnapshotForDate(poolChart, date);
+  const priceUsd = getPoolTokenUsdPrice(poolSnapshot, MGSN_LEDGER_CANISTER);
+  if (priceUsd == null) {
+    return {
+      usdSpent: null,
+      usdBasis: "unavailable",
+      priceUsd: null,
+    };
+  }
+
+  return {
+    usdSpent: mgsnAcquired * priceUsd,
+    usdBasis: "estimated_pool_snapshot",
+    priceUsd,
+  };
 }
 
 function buildChunkJobs(start, end, canisterId) {
@@ -453,24 +477,56 @@ export async function fetchBuybackProgramData(force = false) {
     const transfer = tx.transfer?.[0];
     if (!transfer || accountOwner(transfer.to) !== publicAccount) return;
 
+    const mgsnAcquired = tokenAmountToNumber(transfer.amount, snapshot.decimals);
     log.push({
       blockIndex: Number(blockIndex),
       txId: blockIndex.toString(),
       date: txDate(tx.timestamp),
       usdSpent: null,
-      mgsnAcquired: tokenAmountToNumber(transfer.amount, snapshot.decimals),
+      usdBasis: "unavailable",
+      usdReferencePrice: null,
+      mgsnAcquired,
       note: "Detected transfer into public buyback vault",
     });
   }, force);
 
   log.sort((a, b) => a.blockIndex - b.blockIndex);
 
+  let estimatedUsdCount = 0;
+  if (log.length > 0) {
+    try {
+      const infoSnapshot = await fetchICPSwapInfoSnapshot(force);
+      if (infoSnapshot.mgsnIcpPool?.poolId) {
+        const poolChart = await fetchPoolChartDaily(infoSnapshot.mgsnIcpPool.poolId, {
+          limit: 400,
+          force,
+        });
+        for (const entry of log) {
+          const estimate = estimateBuybackUsdSpent(
+            entry.mgsnAcquired,
+            entry.date,
+            poolChart
+          );
+          entry.usdSpent = estimate.usdSpent;
+          entry.usdBasis = estimate.usdBasis;
+          entry.usdReferencePrice = estimate.priceUsd;
+          if (estimate.usdSpent != null) estimatedUsdCount += 1;
+        }
+      }
+    } catch {
+      // Leave USD values null if the pool pricing reference cannot be fetched.
+    }
+  }
+
   const value = {
     status: "live",
     publicAccount,
     currentSupply: snapshot.currentSupply,
     log,
-    note: "Indexed from MGSN transfers into the public buyback vault. Exact USD execution values still require the paired ICP-side settlement record.",
+    note:
+      estimatedUsdCount > 0
+        ? "Indexed from MGSN transfers into the public buyback vault. USD values are estimated from daily ICPSwap MGSN/ICP pool snapshots until the paired ICP settlement path is published."
+        : "Indexed from MGSN transfers into the public buyback vault. Matching USD settlement values will appear once the paired ICP execution path is published.",
   };
 
   buybackProgramCache = { ts: Date.now(), value };
@@ -488,23 +544,23 @@ export async function fetchStakingProgramData(force = false) {
   let value;
   if (!canisterId) {
     value = {
-      status: "unconfigured",
+      status: "prelaunch",
       canisterId: null,
       currentSupply: snapshot?.currentSupply ?? null,
       positions: [],
       totalLocked: 0,
       totalWeight: 0,
-      note: "Publish the staking canister ID once live and the page will swap from projected positions to on-chain positions automatically.",
+      note: "The staking contract has not been published yet. This page stays in launch-preview mode until a public canister is available.",
     };
   } else {
     value = {
-      status: "pending_interface",
+      status: "configured",
       canisterId,
       currentSupply: snapshot?.currentSupply ?? null,
       positions: [],
       totalLocked: 0,
       totalWeight: 0,
-      note: "A staking canister ID is configured, but this client still needs that canister's public position interface before it can read live lock tiers and unlock dates.",
+      note: "A public staking canister is configured. Publish its public position methods and this page can upgrade from launch-preview projections to live lock tiers and unlock dates.",
     };
   }
 

@@ -720,7 +720,7 @@ function buildSidebarHTML(dashboard) {
       </div>
 
       <div class="sidebar-footer">
-        <p>Data: ICPSwap canisters · CoinGecko</p>
+        <p>Data: ICPSwap canisters + official info API</p>
         <p>${historyLine}</p>
         <p>${statsLine}</p>
       </div>
@@ -868,7 +868,7 @@ function buildMainHTML(dashboard, m, scenarioHeaderHtml) {
 
       </div>
       <div class="page-footer">
-        <p>Powered by <a href="https://icpswap.com" target="_blank" rel="noopener noreferrer">ICPSwap</a> · ICP/USD from <a href="https://coingecko.com" target="_blank" rel="noopener noreferrer">CoinGecko</a></p>
+        <p>Powered by <a href="https://icpswap.com" target="_blank" rel="noopener noreferrer">ICPSwap</a> · Spot and pool stats from the official ICPSwap data API</p>
         <p style="margin-top:4px">For on-chain analytics, visit <a href="https://dashboard.internetcomputer.org" target="_blank" rel="noopener noreferrer">ICP Dashboard</a></p>
       </div>
     </main>`;

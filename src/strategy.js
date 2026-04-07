@@ -1013,7 +1013,7 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio, scenarioHeade
 
       <div class="page-footer" style="padding:24px 0 60px">
         <p>Signals are informational only and do not constitute financial advice.</p>
-        <p style="margin-top:4px">Powered by <a href="https://icpswap.com" target="_blank" rel="noopener noreferrer">ICPSwap</a> | ICP/USD from <a href="https://coingecko.com" target="_blank" rel="noopener noreferrer">CoinGecko</a></p>
+        <p style="margin-top:4px">Powered by <a href="https://icpswap.com" target="_blank" rel="noopener noreferrer">ICPSwap</a> | Spot and pool stats from the official ICPSwap data API</p>
       </div>
     </div>`;
 }

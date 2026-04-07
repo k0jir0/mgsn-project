@@ -64,6 +64,16 @@ function compactMoney(v) {
 function fmtMaybeMoney(v, d = 2) {
   return typeof v === "number" && Number.isFinite(v) ? fmt(v, d) : "Unavailable";
 }
+function fmtBuybackUsd(entry, d = 2) {
+  if (typeof entry?.usdSpent !== "number" || !Number.isFinite(entry.usdSpent)) {
+    return "Unavailable";
+  }
+  const prefix =
+    entry?.usdBasis === "estimated_pool_snapshot" || entry?.usdBasis === "simulated"
+      ? "~"
+      : "";
+  return `${prefix}${fmt(entry.usdSpent, d)}`;
+}
 function pct(from, to) { return from === 0 ? 0 : ((to - from) / from) * 100; }
 function pctFmt(v, d = 1) { return `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`; }
 
@@ -97,7 +107,38 @@ function projectBuybackSchedule(livePoolStats, depositUsd, months = 12) {
 function computeTotals(log) {
   const totalUsd  = log.reduce((a, b) => a + (b.usdSpent ?? 0), 0);
   const totalMgsn = log.reduce((a, b) => a + (b.mgsnAcquired ?? 0), 0);
-  return { totalUsd, totalMgsn };
+  const exactUsdCount = log.filter((entry) => entry.usdBasis === "exact_execution").length;
+  const estimatedUsdCount = log.filter(
+    (entry) =>
+      entry.usdBasis === "estimated_pool_snapshot" || entry.usdBasis === "simulated"
+  ).length;
+  const unavailableUsdCount = log.filter(
+    (entry) => entry.usdSpent == null || entry.usdBasis === "unavailable"
+  ).length;
+
+  return {
+    totalUsd,
+    totalMgsn,
+    exactUsdCount,
+    estimatedUsdCount,
+    unavailableUsdCount,
+  };
+}
+
+function resolveUsdStatLabel(totals) {
+  if (totals.unavailableUsdCount > 0 && totals.totalUsd > 0) {
+    return "Tracked USD deployed";
+  }
+  if (totals.estimatedUsdCount > 0 && totals.exactUsdCount === 0) {
+    return "Estimated USD deployed";
+  }
+  if (totals.estimatedUsdCount > 0 && totals.exactUsdCount > 0) {
+    return "USD deployed (mixed basis)";
+  }
+  if (totals.unavailableUsdCount > 0 && totals.totalUsd === 0) {
+    return "Tracked USD deployed";
+  }
+  return "Total USD deployed";
 }
 
 // ── Chart ─────────────────────────────────────────────────────────────────────
@@ -168,7 +209,7 @@ function logRow(entry, idx) {
   return `
     <div class="bb-log-row">
       <span class="bb-log-date">${entry.date}</span>
-      <span class="bb-log-usd">${fmtMaybeMoney(entry.usdSpent)}</span>
+      <span class="bb-log-usd">${fmtBuybackUsd(entry)}</span>
       <span class="bb-log-tokens">${compact(entry.mgsnAcquired)} MGSN</span>
       <span class="bb-log-note">${entry.note ?? ""}</span>
       ${entry.txId ? `<a class="bb-log-tx" href="https://www.icpexplorer.com/transaction/${entry.txId}" target="_blank" rel="noopener noreferrer">TX ↗</a>` : `<span class="bb-log-tx bb-log-tx--na">—</span>`}
@@ -177,6 +218,15 @@ function logRow(entry, idx) {
 
 function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, totalSupply, scenarioHeaderHtml) {
   const hasRealVolume = livePoolStats?.mgsnVol30d != null || livePoolStats?.mgsnVol24h != null;
+  const usdStatLabel = resolveUsdStatLabel(totals);
+  const usdLogLabel = totals.estimatedUsdCount > 0 ? "USD value" : "USD spent";
+  const heroBody = buybackState?.status === "unconfigured"
+    ? `${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. The public buyback vault is still prelaunch, so this page is showing the live schedule and calculator while it waits for a published execution wallet.`
+    : buybackState?.status === "simulated"
+      ? `${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. Scenario Studio is currently showcasing simulated executions so the full launch flow can be demonstrated.`
+      : totals.estimatedUsdCount > 0
+        ? `${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. Detected vault inflows are live on-chain; their USD values are estimated from daily ICPSwap MGSN/ICP pool snapshots until the paired ICP settlement path is published.`
+        : `${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. Every detected buyback is logged here and verifiable on the ICP blockchain.`;
   const liveTag = buybackState?.status === "simulated"
     ? `<span class="bb-live-tag bb-live-tag--demo">demo showcase</span>`
     : hasRealVolume
@@ -187,7 +237,7 @@ function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, to
   if (log.length > 0) {
     logSection = `
       <div class="bb-log-header">
-        <span>Date</span><span>USD spent</span><span>MGSN acquired</span><span>Note</span><span>TX</span>
+        <span>Date</span><span>${usdLogLabel}</span><span>MGSN acquired</span><span>Note</span><span>TX</span>
       </div>
       ${log.map(logRow).join("")}`;
   } else if (buybackState?.status === "unconfigured") {
@@ -232,11 +282,11 @@ function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, to
           <div class="bb-hero-eyebrow">MGSN Buyback Program · LP-fee funded</div>
           <h1 class="bb-hero-title">Systematic price support<br>for $MGSN</h1>
           <p class="bb-hero-body">
-            ${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. Every buyback is executed on-chain, publicly logged here, and verifiable on the ICP blockchain.
+            ${heroBody}
           </p>
           <div class="bb-hero-stats">
             <div class="bb-stat">
-              <span class="bb-stat-label">Total USD deployed</span>
+              <span class="bb-stat-label">${usdStatLabel}</span>
               <span class="bb-stat-val ${totals.totalUsd > 0 ? "pos" : ""}">${fmt(totals.totalUsd)}</span>
             </div>
             <div class="bb-stat">

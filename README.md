@@ -48,7 +48,7 @@ ICPSwap swap URL: https://app.icpswap.com/swap?input=ryjl3-tyaaa-aaaaa-aaaba-cai
 - **Frontend:** Vite 7.x multi-page app, Chart.js, vanilla JS ES modules
 - **Backend:** Motoko canister (ICP) — legacy sample canister retained for local experimentation
 - **Deploy:** `icp-cli` to ICP asset canister `yezrb-diaaa-aaaah-qugnq-cai`
-- **Live data:** ICPSwap NodeIndex + TokenStorage canister queries via `src/liveData.js`, plus MGSN ledger/archive queries via `src/onChainData.js`
+- **Live data:** ICPSwap NodeIndex + TokenStorage canister queries, the official ICPSwap info API for spot/pool stats, plus MGSN ledger/archive queries
 
 ---
 
@@ -59,7 +59,7 @@ src/
   main.js          — Dashboard (price charts, portfolio tracker, arbitrage, alerts)
   strategy.js      — Strategy Engine (6-signal score, Kelly sizing, DCA, LP yield)
   buyback.js       — Buyback Program page
-  staking.js       — Staking Program page (APY calculator, tier cards, supply chart)
+  staking.js       — Staking Program page (launch-preview APY calculator, tier cards, supply chart)
   burn.js          — Community Burn page (leaderboard, milestones, impact calculator)
   demoData.js      — Shared constants: BUYBACK_PROGRAM, STAKING_PROGRAM, BURN_PROGRAM
   liveData.js      — Live price + pool stat fetchers (ICPSwap, spot APIs)
@@ -134,7 +134,7 @@ If you want the site to auto-index buyback or staking records from public on-cha
 - `VITE_MGSN_BUYBACK_ACCOUNT` — dedicated public MGSN buyback vault owner principal
 - `VITE_MGSN_STAKING_CANISTER` — staking canister principal once the contract is published
 
-When those values are unset, the UI reports that the program address is not yet configured instead of showing placeholder logs.
+When those values are unset, the UI stays in an honest prelaunch state instead of showing placeholder logs. Buyback USD values are estimated from daily ICPSwap pool snapshots until the paired ICP settlement path is published.
 
 ---
 
