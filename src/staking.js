@@ -27,7 +27,7 @@ import {
 } from "./demoData";
 import { fetchLiveSpotPrices, fetchICPSwapPrices, fetchICPSwapPoolStats } from "./liveData";
 import { fetchStakingProgramData } from "./onChainData.js";
-import { buildMobilePlatformNavHTML } from "./siteChrome.js";
+import { buildPlatformHeaderHTML } from "./siteChrome.js";
 import {
   applyScenarioToPoolStats,
   applyScenarioToPrices,
@@ -290,29 +290,14 @@ function buildHTML(metrics, livePoolStats, mgsnNow, icpNow, stakingState, scenar
         : `Staking positions are coming directly from the on-chain program.`;
 
   return `
-    <header class="top-header">
-      <div class="top-header-logo">
-        <div class="logo-icon">M</div>
-        <div>
-          <div class="logo-title">MGSN Strategy Tracker</div>
-          <div class="logo-subtitle">on Internet Computer</div>
-        </div>
-      </div>
-      <nav class="sk-nav">
-        <a class="sk-nav-link" href="/">Dashboard</a>
-        <a class="sk-nav-link" href="/strategy.html">Strategy</a>
-        <a class="sk-nav-link" href="/buyback.html">Buyback</a>
-        <a class="sk-nav-link active" href="/staking.html">Staking</a>
-        <a class="sk-nav-link" href="/burn.html">Burn</a>
-      </nav>
-      <div class="top-header-spacer"></div>
-      <div class="top-header-badge"><div class="live-dot"></div><span class="badge-text">Supply compression</span></div>
-      <div class="top-header-icp">
-        <span class="header-price-label">MGSN/USD</span>
-        <span class="header-price-val" id="sk-mgsn-price">${mgsnNow ? fmt(mgsnNow, 7) : "—"}</span>
-      </div>
-    </header>
-    ${buildMobilePlatformNavHTML("staking")}
+    ${buildPlatformHeaderHTML({
+      activePage: "staking",
+      badgeText: "Supply compression",
+      priceLabel: "MGSN/USD",
+      priceValue: mgsnNow ? fmt(mgsnNow, 7) : "—",
+      priceId: "sk-mgsn-price",
+      priceClass: mgsnNow ? "live" : "",
+    })}
 
     <div class="sk-page">
       ${scenarioHeaderHtml}

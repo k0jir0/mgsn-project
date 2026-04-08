@@ -24,7 +24,7 @@ Chart.register({
 import { BUYBACK_PROGRAM, TOKEN_CANISTERS } from "./demoData";
 import { fetchLiveSpotPrices, fetchICPSwapPrices, fetchICPSwapPoolStats } from "./liveData";
 import { fetchBuybackProgramData } from "./onChainData.js";
-import { buildMobilePlatformNavHTML } from "./siteChrome.js";
+import { buildPlatformHeaderHTML } from "./siteChrome.js";
 import {
   applyScenarioToPoolStats,
   applyScenarioToPrices,
@@ -249,29 +249,14 @@ function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, to
   }
 
   return `
-    <header class="top-header">
-      <div class="top-header-logo">
-        <div class="logo-icon">M</div>
-        <div>
-          <div class="logo-title">MGSN Strategy Tracker</div>
-          <div class="logo-subtitle">on Internet Computer</div>
-        </div>
-      </div>
-      <nav class="bb-nav">
-        <a class="bb-nav-link" href="/">Dashboard</a>
-        <a class="bb-nav-link" href="/strategy.html">Strategy</a>
-        <a class="bb-nav-link active" href="/buyback.html">Buyback</a>
-        <a class="bb-nav-link" href="/staking.html">Staking</a>
-        <a class="bb-nav-link" href="/burn.html">Burn</a>
-      </nav>
-      <div class="top-header-spacer"></div>
-      <div class="top-header-badge"><div class="live-dot"></div><span class="badge-text">Price support</span></div>
-      <div class="top-header-icp">
-        <span class="header-price-label">MGSN/USD</span>
-        <span class="header-price-val" id="bb-mgsn-price">${mgsnNow ? fmt(mgsnNow, 7) : "—"}</span>
-      </div>
-    </header>
-    ${buildMobilePlatformNavHTML("buyback")}
+    ${buildPlatformHeaderHTML({
+      activePage: "buyback",
+      badgeText: "Price support",
+      priceLabel: "MGSN/USD",
+      priceValue: mgsnNow ? fmt(mgsnNow, 7) : "—",
+      priceId: "bb-mgsn-price",
+      priceClass: mgsnNow ? "live" : "",
+    })}
 
     <div class="bb-page">
       ${scenarioHeaderHtml}

@@ -25,7 +25,7 @@ import { BURN_PROGRAM, TOKEN_CANISTERS } from "./demoData";
 import { DEFAULT_BURN_CALC_AMOUNT } from "./liveDefaults.js";
 import { fetchICPSwapPrices } from "./liveData";
 import { fetchBurnProgramData } from "./onChainData.js";
-import { buildMobilePlatformNavHTML } from "./siteChrome.js";
+import { buildPlatformHeaderHTML } from "./siteChrome.js";
 import {
   applyScenarioToPrices,
   attachScenarioStudio,
@@ -285,29 +285,14 @@ function buildHTML(metrics, mgsnNow, scenarioHeaderHtml, scenarioAmount) {
   }).join("") || `<div class="br-hall-empty">The Hall of Flame awaits its first hero. Burn MGSN to take the top spot.</div>`;
 
   return `
-    <header class="top-header">
-      <div class="top-header-logo">
-        <div class="logo-icon">M</div>
-        <div>
-          <div class="logo-title">MGSN Strategy Tracker</div>
-          <div class="logo-subtitle">on Internet Computer</div>
-        </div>
-      </div>
-      <nav class="sk-nav">
-        <a class="sk-nav-link" href="/">Dashboard</a>
-        <a class="sk-nav-link" href="/strategy.html">Strategy</a>
-        <a class="sk-nav-link" href="/buyback.html">Buyback</a>
-        <a class="sk-nav-link" href="/staking.html">Staking</a>
-        <a class="sk-nav-link active br-nav-active" href="/burn.html">Burn</a>
-      </nav>
-      <div class="top-header-spacer"></div>
-      <div class="top-header-badge"><div class="live-dot"></div><span class="badge-text">Supply destruction</span></div>
-      <div class="top-header-icp">
-        <span class="header-price-label">MGSN/USD</span>
-        <span class="header-price-val" id="br-mgsn-price">${mgsnNow ? fmt(mgsnNow, 7) : "—"}</span>
-      </div>
-    </header>
-    ${buildMobilePlatformNavHTML("burn")}
+    ${buildPlatformHeaderHTML({
+      activePage: "burn",
+      badgeText: "Supply destruction",
+      priceLabel: "MGSN/USD",
+      priceValue: mgsnNow ? fmt(mgsnNow, 7) : "—",
+      priceId: "br-mgsn-price",
+      priceClass: mgsnNow ? "live" : "",
+    })}
 
     <div class="br-page">
       ${scenarioHeaderHtml}
