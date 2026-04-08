@@ -21,7 +21,12 @@ Chart.register({
   },
 });
 
-import { demoDashboard, TOKEN_CANISTERS } from "./demoData";
+import { TOKEN_CANISTERS } from "./demoData";
+import {
+  createUnavailableDashboard,
+  getDashboardLastPoint,
+  hasDashboardHistory,
+} from "./liveDefaults.js";
 import {
   fetchDashboardData,
   fetchLiveSpotPrices,
@@ -1018,6 +1023,48 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio, scenarioHeade
     </div>`;
 }
 
+function buildUnavailableHTML(prices, livePoolStats, scenarioHeaderHtml) {
+  const volume30d = livePoolStats?.mgsnVol30d ?? (livePoolStats?.mgsnVol24h ? livePoolStats.mgsnVol24h * 30 : null);
+  return `
+    ${buildPlatformHeaderHTML({
+      activePage: "strategy",
+      badgeText: "Live signals",
+      priceLabel: "ICP/USD",
+      priceValue: prices.icpUsd ? `$${prices.icpUsd.toFixed(2)}` : "—",
+      priceId: "s-icp-price",
+      priceClass: prices.icpUsd ? "live" : "",
+    })}
+
+    <div class="s-page">
+      ${scenarioHeaderHtml}
+
+      <section class="s-section" style="padding-top:20px">
+        <div class="s-calc-card">
+          <span class="s-calc-section-label">Strategy feed unavailable</span>
+          <h2 class="main-title" style="margin:0 0 10px">Live market history is unavailable</h2>
+          <p class="main-subtitle" style="max-width:780px">The strategy engine only scores live ICPSwap market history. It does not synthesize composite signals, backtests, or arbitrage scores from bundled snapshots. Refresh this page once overlapping MGSN and BOB history is available again.</p>
+          <div class="s-port-grid" style="margin-top:16px">
+            <div class="s-port-stat"><span class="s-port-label">MGSN spot</span><span class="s-port-val mgsn">${prices.mgsnUsd ? fmt(prices.mgsnUsd, 7) : "—"}</span></div>
+            <div class="s-port-stat"><span class="s-port-label">BOB spot</span><span class="s-port-val">${prices.bobUsd ? fmt(prices.bobUsd, 4) : "—"}</span></div>
+            <div class="s-port-stat"><span class="s-port-label">ICP spot</span><span class="s-port-val">${prices.icpUsd ? fmt(prices.icpUsd, 2) : "—"}</span></div>
+            <div class="s-port-stat"><span class="s-port-label">MGSN 30d volume</span><span class="s-port-val">${volume30d != null ? compactMoney(volume30d) : "Unavailable"}</span></div>
+            <div class="s-port-stat"><span class="s-port-label">Pool liquidity</span><span class="s-port-val">${livePoolStats?.mgsnLiq != null ? compactMoney(livePoolStats.mgsnLiq) : "Unavailable"}</span></div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+            <a class="s-cta-btn s-cta-primary" href="${ICPSWAP_SWAP_URL}" target="_blank" rel="noopener noreferrer">Buy MGSN →</a>
+            <a class="s-cta-btn s-cta-secondary" href="${ICPSWAP_LP_URL}" target="_blank" rel="noopener noreferrer">Add Liquidity</a>
+            <a class="s-cta-btn s-cta-secondary" href="${ICPSWAP_INFO_MGSN}" target="_blank" rel="noopener noreferrer">View MGSN on ICPSwap</a>
+          </div>
+        </div>
+      </section>
+
+      <div class="page-footer" style="padding:24px 0 60px">
+        <p>The strategy engine resumes automatically when live ICPSwap history is available again.</p>
+        <p style="margin-top:4px">Powered by <a href="https://icpswap.com" target="_blank" rel="noopener noreferrer">ICPSwap</a> | No bundled market snapshot is shown here.</p>
+      </div>
+    </div>`;
+}
+
 // ── DCA calculator logic ──────────────────────────────────────────────────────
 
 function buildDCASchedule(budget, strategy, sig, dashboard) {
@@ -1328,6 +1375,7 @@ let liveIcpUsd  = null;
 let liveMgsnUsd = null;
 let liveBobUsd  = null;
 let livePoolStats = {};
+const STRATEGY_CACHE_KEY = "strategy-page-live-v1";
 
 async function bootstrap() {
   const styleEl = document.createElement("style");
@@ -1335,7 +1383,7 @@ async function bootstrap() {
   document.head.appendChild(styleEl);
 
   const app = document.querySelector("#app");
-  const cachedState = readViewCache("strategy-page");
+  const cachedState = readViewCache(STRATEGY_CACHE_KEY);
   let baseState = buildStrategyBaseState(cachedState ?? {});
   renderStrategyPage(app, baseState, cachedState ? "cached" : "fallback");
 
@@ -1353,7 +1401,7 @@ async function bootstrap() {
     liveBobUsd: liveIcpswapResult.value?.bobUsd ?? baseState.liveBobUsd,
     livePoolStats: livePoolResult.value ?? baseState.livePoolStats,
   });
-  writeViewCache("strategy-page", baseState);
+  writeViewCache(STRATEGY_CACHE_KEY, baseState);
   renderStrategyPage(app, baseState, "live");
 
   setInterval(async () => {
@@ -1370,7 +1418,7 @@ async function bootstrap() {
       liveBobUsd: nextIcpswapResult.value?.bobUsd ?? baseState.liveBobUsd,
       livePoolStats: nextPoolResult.value ?? baseState.livePoolStats,
     });
-    writeViewCache("strategy-page", baseState);
+    writeViewCache(STRATEGY_CACHE_KEY, baseState);
     renderStrategyPage(app, baseState, "live");
   }, 60_000);
 }
@@ -1399,7 +1447,7 @@ bootstrap();
 
 function buildStrategyBaseState(raw = {}) {
   return {
-    dashboard: raw.dashboard ?? demoDashboard,
+    dashboard: raw.dashboard ?? createUnavailableDashboard(),
     liveIcpUsd: raw.liveIcpUsd ?? null,
     liveMgsnUsd: raw.liveMgsnUsd ?? null,
     liveBobUsd: raw.liveBobUsd ?? null,
@@ -1409,12 +1457,13 @@ function buildStrategyBaseState(raw = {}) {
 
 function renderStrategyPage(app, baseState, hydrationMode) {
   const scenario = loadScenarioState();
-  const dashboard = applyScenarioToDashboard(baseState.dashboard ?? demoDashboard, scenario);
+  const dashboard = applyScenarioToDashboard(baseState.dashboard ?? createUnavailableDashboard(), scenario);
+  const lastPoint = getDashboardLastPoint(dashboard);
   const prices = applyScenarioToPrices(
     {
-      icpUsd: baseState.liveIcpUsd ?? dashboard.timeline.at(-1)?.icpPrice ?? null,
-      mgsnUsd: baseState.liveMgsnUsd ?? dashboard.timeline.at(-1)?.mgsnPrice ?? null,
-      bobUsd: baseState.liveBobUsd ?? dashboard.timeline.at(-1)?.bobPrice ?? null,
+      icpUsd: baseState.liveIcpUsd ?? lastPoint?.icpPrice ?? null,
+      mgsnUsd: baseState.liveMgsnUsd ?? lastPoint?.mgsnPrice ?? null,
+      bobUsd: baseState.liveBobUsd ?? lastPoint?.bobPrice ?? null,
     },
     scenario
   );
@@ -1425,10 +1474,30 @@ function renderStrategyPage(app, baseState, hydrationMode) {
   liveBobUsd = prices.bobUsd;
   livePoolStats = livePoolStatsLocal;
 
+  if (!hasDashboardHistory(dashboard)) {
+    app.innerHTML = buildUnavailableHTML(
+      prices,
+      livePoolStatsLocal,
+      buildScenarioHeaderHTML(
+        "strategy",
+        buildDashboardSourceChips(dashboard, scenario, hydrationMode)
+      )
+    );
+
+    attachScenarioStudio(app, (action) => {
+      if (action?.type === "refresh" || action?.type === "clear-cache") {
+        window.location.reload();
+        return;
+      }
+      renderStrategyPage(app, baseState, hydrationMode);
+    });
+    return;
+  }
+
   const sig = computeSignals(dashboard, prices.icpUsd, prices.mgsnUsd, prices.bobUsd);
   const bt = runDCABacktest(dashboard, 100, prices.mgsnUsd, prices.bobUsd);
   const lp = estimateLPYield(sig.mgsnNow, sig.icpNow, 500, dashboard, livePoolStatsLocal);
-  const historicalMgsn = dashboard.timeline.at(-2)?.mgsnPrice ?? dashboard.timeline.at(-1).mgsnPrice;
+  const historicalMgsn = dashboard.timeline.at(-2)?.mgsnPrice ?? dashboard.timeline.at(-1)?.mgsnPrice ?? null;
   const arb = computeArbitrageScore(prices.mgsnUsd, bt.projectedNow, historicalMgsn);
   const defaults = getPortfolioDefaults(scenario);
   const defPort = computePortfolioPnl(defaults.holdings, defaults.avgCost, sig.mgsnNow, bt.projectedNow);
@@ -1500,8 +1569,12 @@ function renderStrategyPage(app, baseState, hydrationMode) {
     });
   });
 
-  attachScenarioStudio(app, () => {
-    renderStrategyPage(app, baseState, loadScenarioState().demoMode ? "demo" : hydrationMode);
+  attachScenarioStudio(app, (action) => {
+    if (action?.type === "refresh" || action?.type === "clear-cache") {
+      window.location.reload();
+      return;
+    }
+    renderStrategyPage(app, baseState, hydrationMode);
   });
 
   if (prices.icpUsd) {

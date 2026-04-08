@@ -550,7 +550,7 @@ export async function fetchStakingProgramData(force = false) {
       positions: [],
       totalLocked: 0,
       totalWeight: 0,
-      note: "The staking contract has not been published yet. This page stays in launch-preview mode until a public canister is available.",
+      note: "No public staking canister has been published yet, so no live staking positions can be displayed.",
     };
   } else {
     value = {
@@ -560,7 +560,7 @@ export async function fetchStakingProgramData(force = false) {
       positions: [],
       totalLocked: 0,
       totalWeight: 0,
-      note: "A public staking canister is configured. Publish its public position methods and this page can upgrade from launch-preview projections to live lock tiers and unlock dates.",
+      note: "A public staking canister is configured. Publish its public position methods and this page can upgrade from status-only reporting to live lock tiers and unlock dates.",
     };
   }
 

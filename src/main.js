@@ -32,8 +32,13 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-import { demoDashboard } from "./demoData";
 import { fetchDashboardData } from "./liveData";
+import {
+  createUnavailableDashboard,
+  getDashboardFirstPoint,
+  getDashboardLastPoint,
+  hasDashboardHistory,
+} from "./liveDefaults.js";
 import { buildPlatformHeaderHTML } from "./siteChrome.js";
 import {
   applyScenarioToDashboard,
@@ -95,6 +100,7 @@ const state = {
 };
 
 const charts = {};
+const DASHBOARD_CACHE_KEY = "dashboard-live-v1";
 
 // ── Math helpers ───────────────────────────────────────────────────────────────
 
@@ -124,6 +130,7 @@ function getSeries(timeline, rangeKey) {
 // ── Format helpers ─────────────────────────────────────────────────────────────
 
 function fmt(v, d = 2) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency", currency: "USD",
     minimumFractionDigits: d, maximumFractionDigits: d,
@@ -131,16 +138,19 @@ function fmt(v, d = 2) {
 }
 
 function fmtTokenUsd(v, threshold = 0.001, tinyDigits = 7, normalDigits = 4) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return fmt(v, Math.abs(v) < threshold ? tinyDigits : normalDigits);
 }
 
 function compact(v) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return new Intl.NumberFormat("en-US", {
     notation: "compact", maximumFractionDigits: 2,
   }).format(v);
 }
 
 function compactMoney(v) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency", currency: "USD",
     notation: "compact", maximumFractionDigits: 2,
@@ -152,13 +162,34 @@ function fmtMaybeMoney(v, fallback = "—") {
 }
 
 function pct(start, end) {
-  if (start === 0) return 0;
+  if (
+    typeof start !== "number" ||
+    !Number.isFinite(start) ||
+    typeof end !== "number" ||
+    !Number.isFinite(end) ||
+    start === 0
+  ) {
+    return null;
+  }
   return ((end - start) / start) * 100;
 }
 
 function pctFmt(v, decimals = 1) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   const sign = v > 0 ? "+" : "";
   return `${sign}${v.toFixed(decimals)}%`;
+}
+
+function safeMultiply(left, right) {
+  return typeof left === "number" && Number.isFinite(left) && typeof right === "number" && Number.isFinite(right)
+    ? left * right
+    : null;
+}
+
+function averageNumbers(values) {
+  const valid = values.filter((value) => typeof value === "number" && Number.isFinite(value));
+  if (!valid.length) return null;
+  return valid.reduce((sum, value) => sum + value, 0) / valid.length;
 }
 
 function formatUpdatedAt(updatedAt) {
@@ -221,6 +252,29 @@ function mkChart(id, config) {
   const canvas = document.getElementById(`chart-${id}`);
   if (!canvas) return;
   charts[id] = new Chart(canvas, config);
+}
+
+function renderChartMessage(canvas, width, height, message) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  if (charts[canvas.id.replace("chart-", "")]) {
+    charts[canvas.id.replace("chart-", "")].destroy();
+    delete charts[canvas.id.replace("chart-", "")];
+  }
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#101423";
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = "#1a1f3a";
+  ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
+  ctx.fillStyle = "#5a6a8a";
+  ctx.font = "12px 'IBM Plex Mono', monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(message, width / 2, height / 2 - 8);
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "11px 'IBM Plex Mono', monospace";
+  ctx.fillText("No bundled snapshot is rendered in live-only mode.", width / 2, height / 2 + 14);
 }
 
 // ── Chart builders ─────────────────────────────────────────────────────────────
@@ -535,6 +589,8 @@ function renderRaisesChart(series) {
 
 // ── Render all charts ────────────────────────────────────────────────────────
 function renderAllCharts(dashboard) {
+  const hasHistory = hasDashboardHistory(dashboard);
+
   PANELS.forEach(({ id }) => {
     const canvas = document.getElementById(`chart-${id}`);
     if (!canvas) return;
@@ -547,8 +603,17 @@ function renderAllCharts(dashboard) {
     canvas.style.width  = w + 'px';
     canvas.style.height = h + 'px';
 
+    if (!hasHistory) {
+      renderChartMessage(canvas, w, h, "Live market history unavailable");
+      return;
+    }
+
     try {
       const series = getSeries(dashboard.timeline, state.panelRanges[id]);
+      if (!series.length) {
+        renderChartMessage(canvas, w, h, "Live market history unavailable");
+        return;
+      }
       switch (id) {
         case "reserve":     renderReserveChart(series); break;
         case "sma":         renderSmaChart(series); break;
@@ -577,44 +642,82 @@ function renderAllCharts(dashboard) {
 // ── Compute latest-point metrics ──────────────────────────────────────────────
 
 function computeMetrics(dashboard) {
-  const tl     = dashboard.timeline;
-  const last   = tl[tl.length - 1];
-  const first  = tl[0];
+  const tl = Array.isArray(dashboard.timeline) ? dashboard.timeline : [];
+  const last = getDashboardLastPoint(dashboard);
+  const first = getDashboardFirstPoint(dashboard);
+  const mgsnCap = safeMultiply(last?.mgsnPrice, dashboard.mgsnSupply);
+  const bobCap = safeMultiply(last?.bobPrice, dashboard.bobSupply);
+  const nav = bobCap;
+  const mNavRatio = typeof nav === "number" && nav > 0 && typeof mgsnCap === "number"
+    ? mgsnCap / nav
+    : null;
+  const navPremium = typeof mNavRatio === "number" ? (mNavRatio - 1) * 100 : null;
 
-  const mgsnCap      = last.mgsnPrice * dashboard.mgsnSupply;
-  const bobCap       = last.bobPrice  * dashboard.bobSupply;
-  const nav          = bobCap;   // implied NAV = BOB market cap
-  const mNavRatio    = nav > 0 ? mgsnCap / nav : 0;
-  const navPremium   = (mNavRatio - 1) * 100;  // % premium/discount to NAV
+  const mgsnChange = pct(first?.mgsnPrice, last?.mgsnPrice);
+  const bobChange = pct(first?.bobPrice, last?.bobPrice);
+  const icpChange = pct(first?.icpPrice, last?.icpPrice);
 
-  const mgsnChange   = pct(first.mgsnPrice, last.mgsnPrice);
-  const bobChange    = pct(first.bobPrice,  last.bobPrice);
-  const icpChange    = pct(first.icpPrice,  last.icpPrice);
+  const avgCostMgsn = averageNumbers(tl.map((point) => point.mgsnPrice));
+  const avgCostIcp = averageNumbers(
+    tl
+      .map((point) => (
+        typeof point.mgsnPrice === "number" &&
+        Number.isFinite(point.mgsnPrice) &&
+        typeof point.icpPrice === "number" &&
+        Number.isFinite(point.icpPrice) &&
+        point.icpPrice > 0
+          ? point.mgsnPrice / point.icpPrice
+          : null
+      ))
+      .filter((value) => value != null)
+  );
+  const unrealisedUsd =
+    typeof last?.mgsnPrice === "number" &&
+    Number.isFinite(last.mgsnPrice) &&
+    typeof avgCostMgsn === "number" &&
+    Number.isFinite(avgCostMgsn) &&
+    typeof dashboard.mgsnSupply === "number" &&
+    Number.isFinite(dashboard.mgsnSupply)
+      ? (last.mgsnPrice - avgCostMgsn) * dashboard.mgsnSupply
+      : null;
+  const unrealisedPct = pct(avgCostMgsn, last?.mgsnPrice);
 
-  const avgCostMgsn  = tl.reduce((s, p) => s + p.mgsnPrice, 0) / tl.length;
-  const avgCostIcp   = tl.reduce((s, p) => s + p.mgsnPrice / p.icpPrice, 0) / tl.length;
-  const unrealisedUsd = (last.mgsnPrice - avgCostMgsn) * dashboard.mgsnSupply;
-  const unrealisedPct = pct(avgCostMgsn, last.mgsnPrice);
-
-  const liqParts     = [last.bobLiquidity, last.mgsnLiquidity]
+  const liqParts = [last?.bobLiquidity, last?.mgsnLiquidity]
     .filter((value) => Number.isFinite(value));
-  const fallbackLiq  = liqParts.length
+  const fallbackLiq = liqParts.length
     ? liqParts.reduce((sum, value) => sum + value, 0)
     : null;
-  const icpLive      = state.liveIcpUsd ?? last.icpPrice;
+  const icpLive = state.liveIcpUsd ?? last?.icpPrice ?? null;
 
-  // BTC-Yield equivalent: % change in mNAV ratio from first to last
-  const firstNav     = (first.bobPrice * dashboard.bobSupply);
-  const firstMgsnCap = (first.mgsnPrice * dashboard.mgsnSupply);
-  const firstMNav    = firstNav > 0 ? firstMgsnCap / firstNav : 0;
-  const mNavYield    = pct(firstMNav, mNavRatio);
+  const firstNav = safeMultiply(first?.bobPrice, dashboard.bobSupply);
+  const firstMgsnCap = safeMultiply(first?.mgsnPrice, dashboard.mgsnSupply);
+  const firstMNav =
+    typeof firstNav === "number" && firstNav > 0 && typeof firstMgsnCap === "number"
+      ? firstMgsnCap / firstNav
+      : null;
+  const mNavYield = pct(firstMNav, mNavRatio);
 
-  // ICP-per-token (sats-per-share equivalent)
-  const mgsnIcp      = last.mgsnPrice / last.icpPrice;
-  const bobIcp       = last.bobPrice  / last.icpPrice;
+  const mgsnIcp =
+    typeof last?.mgsnPrice === "number" &&
+    Number.isFinite(last.mgsnPrice) &&
+    typeof last?.icpPrice === "number" &&
+    Number.isFinite(last.icpPrice) &&
+    last.icpPrice > 0
+      ? last.mgsnPrice / last.icpPrice
+      : null;
+  const bobIcp =
+    typeof last?.bobPrice === "number" &&
+    Number.isFinite(last.bobPrice) &&
+    typeof last?.icpPrice === "number" &&
+    Number.isFinite(last.icpPrice) &&
+    last.icpPrice > 0
+      ? last.bobPrice / last.icpPrice
+      : null;
 
   return {
-    last, mgsnCap, bobCap, nav, mNavRatio, navPremium,
+    hasHistory: tl.length > 0,
+    last: last ?? { bobPrice: null, mgsnPrice: null, icpPrice: null },
+    mgsnCap, bobCap, nav, mNavRatio, navPremium,
     mgsnChange, bobChange, icpChange,
     avgCostMgsn, avgCostIcp, unrealisedUsd, unrealisedPct,
     totalLiq: dashboard.marketStats?.totalLiquidityUsd ?? fallbackLiq, icpLive,
@@ -686,7 +789,7 @@ function buildSidebarHTML(dashboard, hydrationMode = "live") {
     ? `History: ${dashboard.marketStats.historyStartLabel} - ${dashboard.marketStats.historyEndLabel}`
     : hydratingLive
       ? "History: loading ICPSwap history..."
-      : "History: fallback snapshot";
+      : "History: live feed unavailable";
   const statsLine = dashboard.marketStats?.mgsnVol24h != null || dashboard.marketStats?.bobVol24h != null
     ? `24h volume: BOB ${fmtMaybeMoney(dashboard.marketStats?.bobVol24h)} · MGSN ${fmtMaybeMoney(dashboard.marketStats?.mgsnVol24h)}`
     : hydratingLive
@@ -745,24 +848,28 @@ function buildSidebarHTML(dashboard, hydrationMode = "live") {
 
 function buildMainHTML(dashboard, m, scenarioHeaderHtml, hydrationMode = "live") {
   const hydratingLive = isHydratingDashboard(hydrationMode);
-  const changeClass = m.unrealisedPct >= 0 ? "positive" : "negative";
-  const changeArrow = m.unrealisedPct >= 0 ? "▲" : "▼";
-  const pnlSign     = m.unrealisedPct >= 0 ? "+" : "";
-  const navPremCls  = m.navPremium >= 0 ? "premium" : "discount";
-  const navPremText = m.navPremium >= 0
-    ? `+${m.navPremium.toFixed(2)}% premium to NAV`
-    : `${m.navPremium.toFixed(2)}% discount to NAV`;
+  const hasUnrealised = typeof m.unrealisedPct === "number" && Number.isFinite(m.unrealisedPct);
+  const changeClass = !hasUnrealised ? "" : m.unrealisedPct >= 0 ? "positive" : "negative";
+  const changeArrow = !hasUnrealised ? "" : m.unrealisedPct >= 0 ? "▲" : "▼";
+  const pnlSign = !hasUnrealised ? "" : m.unrealisedPct >= 0 ? "+" : "";
+  const hasNavPremium = typeof m.navPremium === "number" && Number.isFinite(m.navPremium);
+  const navPremCls = !hasNavPremium ? "" : m.navPremium >= 0 ? "premium" : "discount";
+  const navPremText = !hasNavPremium
+    ? "NAV unavailable"
+    : m.navPremium >= 0
+      ? `+${m.navPremium.toFixed(2)}% premium to NAV`
+      : `${m.navPremium.toFixed(2)}% discount to NAV`;
 
   const historySummary = dashboard.marketStats?.historyStartLabel
     ? `${dashboard.marketStats.historyStartLabel} - ${dashboard.marketStats.historyEndLabel} monthly closes + live spot`
     : hydratingLive
       ? "Loading ICPSwap history and live spot..."
-      : "Fallback snapshot";
+      : "Live market history unavailable";
   const volatilitySource = dashboard.marketStats?.historyStartLabel
     ? "ICPSwap monthly OHLC history"
     : hydratingLive
       ? "Loading live ICPSwap history"
-      : "Fallback snapshot";
+      : "Live market history unavailable";
   const volumeChips = [
     { label: "BOB 24h vol", value: fmtMaybeMoney(dashboard.marketStats?.bobVol24h), cls: "bob" },
     { label: "MGSN 24h vol", value: fmtMaybeMoney(dashboard.marketStats?.mgsnVol24h), cls: "mgsn" },
@@ -780,7 +887,7 @@ function buildMainHTML(dashboard, m, scenarioHeaderHtml, hydrationMode = "live")
         <div class="reserve-main-stat">
           <span class="reserve-share-label">MGSN Reserve Value</span>
           <span class="reserve-amount">${compactMoney(m.mgsnCap)}</span>
-          <span class="reserve-tokens">◈ ${compact(dashboard.mgsnSupply)} MGSN circulating</span>
+          <span class="reserve-tokens">${dashboard.mgsnSupply != null ? `◈ ${compact(dashboard.mgsnSupply)} MGSN circulating` : "Circulating supply unavailable"}</span>
         </div>
         <div class="reserve-meta-list">
           <div class="meta-item">
@@ -789,11 +896,11 @@ function buildMainHTML(dashboard, m, scenarioHeaderHtml, hydrationMode = "live")
           </div>
           <div class="meta-item">
             <span class="meta-label">Unrealised P&L</span>
-            <span class="meta-value ${changeClass}">${changeArrow}${pnlSign}${m.unrealisedPct.toFixed(2)}% (${compactMoney(Math.abs(m.unrealisedUsd))})</span>
+            <span class="meta-value ${changeClass}">${hasUnrealised ? `${changeArrow}${pnlSign}${m.unrealisedPct.toFixed(2)}% (${compactMoney(Math.abs(m.unrealisedUsd))})` : "Unavailable"}</span>
           </div>
           <div class="meta-item">
             <span class="meta-label">mNAV</span>
-            <span class="meta-value">${m.mNavRatio.toFixed(3)}×
+            <span class="meta-value">${typeof m.mNavRatio === "number" && Number.isFinite(m.mNavRatio) ? `${m.mNavRatio.toFixed(3)}×` : "Unavailable"}
               <span class="nav-pill ${navPremCls}">${navPremText}</span>
             </span>
           </div>
@@ -814,8 +921,9 @@ function buildMainHTML(dashboard, m, scenarioHeaderHtml, hydrationMode = "live")
       </div>`;
   }
 
-  const bobChg    = pct(dashboard.timeline[0].bobPrice,  m.last.bobPrice);
-  const icpChg    = pct(dashboard.timeline[0].icpPrice,  m.last.icpPrice);
+  const firstPoint = getDashboardFirstPoint(dashboard);
+  const bobChg = pct(firstPoint?.bobPrice, m.last.bobPrice);
+  const icpChg = pct(firstPoint?.icpPrice, m.last.icpPrice);
 
   return `
     <main class="main-content">
@@ -835,41 +943,41 @@ function buildMainHTML(dashboard, m, scenarioHeaderHtml, hydrationMode = "live")
         ${cp("sma", "BOB & MGSN 200-SMA", "Spot prices with long-term moving average overlay", [
           { label: "BOB spot",    value: fmt(m.last.bobPrice,  4), cls: "bob"  },
           { label: "MGSN spot",   value: fmtTokenUsd(m.last.mgsnPrice), cls: "mgsn" },
-          { label: "BOB Δ",       value: pctFmt(bobChg),           cls: bobChg  >= 0 ? "pos" : "neg" },
-          { label: "MGSN Δ",      value: pctFmt(m.mgsnChange),     cls: m.mgsnChange >= 0 ? "pos" : "neg" },
+          { label: "BOB Δ",       value: pctFmt(bobChg),           cls: typeof bobChg === "number" && bobChg >= 0 ? "pos" : typeof bobChg === "number" ? "neg" : "" },
+          { label: "MGSN Δ",      value: pctFmt(m.mgsnChange),     cls: typeof m.mgsnChange === "number" && m.mgsnChange >= 0 ? "pos" : typeof m.mgsnChange === "number" ? "neg" : "" },
         ])}
 
         ${cp("performance", "Performance vs. Benchmarks", "Indexed to 100 at first data point — MGSN · BOB · ICP", [
-          { label: "MGSN total return", value: pctFmt(m.mgsnChange), cls: m.mgsnChange >= 0 ? "pos" : "neg" },
-          { label: "BOB total return",  value: pctFmt(bobChg),       cls: bobChg  >= 0 ? "pos" : "neg"  },
-          { label: "ICP total return",  value: pctFmt(icpChg),       cls: icpChg  >= 0 ? "pos" : "neg"  },
+          { label: "MGSN total return", value: pctFmt(m.mgsnChange), cls: typeof m.mgsnChange === "number" && m.mgsnChange >= 0 ? "pos" : typeof m.mgsnChange === "number" ? "neg" : "" },
+          { label: "BOB total return",  value: pctFmt(bobChg),       cls: typeof bobChg === "number" && bobChg >= 0 ? "pos" : typeof bobChg === "number" ? "neg" : "" },
+          { label: "ICP total return",  value: pctFmt(icpChg),       cls: typeof icpChg === "number" && icpChg >= 0 ? "pos" : typeof icpChg === "number" ? "neg" : "" },
         ])}
 
         ${cp("yield", "MGSN Yield, Gain & Holdings", "Monthly gain % (bars) · cumulative return · holdings value", [
-          { label: "Cumulative return",   value: pctFmt(m.mgsnChange),      cls: m.mgsnChange >= 0 ? "pos" : "neg" },
-          { label: "mNAV yield",          value: pctFmt(m.mNavYield),       cls: m.mNavYield  >= 0 ? "pos" : "neg" },
+          { label: "Cumulative return",   value: pctFmt(m.mgsnChange),      cls: typeof m.mgsnChange === "number" && m.mgsnChange >= 0 ? "pos" : typeof m.mgsnChange === "number" ? "neg" : "" },
+          { label: "mNAV yield",          value: pctFmt(m.mNavYield),       cls: typeof m.mNavYield === "number" && m.mNavYield >= 0 ? "pos" : typeof m.mNavYield === "number" ? "neg" : "" },
           { label: "Holdings value",      value: compactMoney(m.mgsnCap),   cls: "mgsn" },
         ])}
 
         ${cp("satstoshare", "ICP per Token", "How many ICP units equal 1 MGSN or 1 BOB token over time", [
-          { label: "MGSN/ICP",    value: `${m.mgsnIcp.toFixed(5)} ICP`, cls: "mgsn" },
-          { label: "BOB/ICP",     value: `${m.bobIcp.toFixed(5)} ICP`,  cls: "bob"  },
-          { label: "Avg MGSN/ICP",value: `${m.avgCostIcp.toFixed(5)} ICP` },
+          { label: "MGSN/ICP",    value: typeof m.mgsnIcp === "number" && Number.isFinite(m.mgsnIcp) ? `${m.mgsnIcp.toFixed(5)} ICP` : "—", cls: "mgsn" },
+          { label: "BOB/ICP",     value: typeof m.bobIcp === "number" && Number.isFinite(m.bobIcp) ? `${m.bobIcp.toFixed(5)} ICP` : "—",  cls: "bob"  },
+          { label: "Avg MGSN/ICP",value: typeof m.avgCostIcp === "number" && Number.isFinite(m.avgCostIcp) ? `${m.avgCostIcp.toFixed(5)} ICP` : "—" },
         ])}
 
         ${cp("nav", "mNAV Analysis", "MGSN market cap vs implied NAV (BOB market cap) — mNAV ratio on right axis", [
           { label: "MGSN mkt cap", value: compactMoney(m.mgsnCap),       cls: "mgsn" },
           { label: "Implied NAV",  value: compactMoney(m.nav),           cls: "bob"  },
-          { label: "mNAV ratio",   value: `${m.mNavRatio.toFixed(3)}×`,  cls: "gold" },
-          { label: "Premium/Disc", value: `${m.navPremium >= 0 ? "+" : ""}${m.navPremium.toFixed(2)}%`,
-            cls: m.navPremium >= 0 ? "pos" : "neg" },
+          { label: "mNAV ratio",   value: typeof m.mNavRatio === "number" && Number.isFinite(m.mNavRatio) ? `${m.mNavRatio.toFixed(3)}×` : "—",  cls: "gold" },
+          { label: "Premium/Disc", value: typeof m.navPremium === "number" && Number.isFinite(m.navPremium) ? `${m.navPremium >= 0 ? "+" : ""}${m.navPremium.toFixed(2)}%` : "—",
+            cls: typeof m.navPremium === "number" && m.navPremium >= 0 ? "pos" : typeof m.navPremium === "number" ? "neg" : "" },
         ])}
 
         ${cp("cost", "Token Cost in ICP", "MGSN and BOB acquisition cost expressed in ICP units — avg cost line", [
-          { label: "MGSN cost",    value: `${m.mgsnIcp.toFixed(6)} ICP`, cls: "mgsn" },
-          { label: "BOB cost",     value: `${m.bobIcp.toFixed(6)} ICP`,  cls: "bob"  },
-          { label: "Avg cost (ICP)", value: `${m.avgCostIcp.toFixed(6)} ICP` },
-          { label: "ICP/USD",      value: `$${m.icpLive.toFixed(2)}`,   cls: state.liveIcpUsd ? "pos" : "" },
+          { label: "MGSN cost",    value: typeof m.mgsnIcp === "number" && Number.isFinite(m.mgsnIcp) ? `${m.mgsnIcp.toFixed(6)} ICP` : "—", cls: "mgsn" },
+          { label: "BOB cost",     value: typeof m.bobIcp === "number" && Number.isFinite(m.bobIcp) ? `${m.bobIcp.toFixed(6)} ICP` : "—",  cls: "bob"  },
+          { label: "Avg cost (ICP)", value: typeof m.avgCostIcp === "number" && Number.isFinite(m.avgCostIcp) ? `${m.avgCostIcp.toFixed(6)} ICP` : "—" },
+          { label: "ICP/USD",      value: typeof m.icpLive === "number" && Number.isFinite(m.icpLive) ? `$${m.icpLive.toFixed(2)}` : "—",   cls: state.liveIcpUsd ? "pos" : "" },
         ])}
 
         ${cp("volatility", "Volatility Comparison", "Rolling 3-period standard deviation · MGSN · BOB · ICP", [
@@ -1007,7 +1115,7 @@ function updateSidebarPrices(m) {
   const bobEl  = sidebar.querySelector(".sidebar-bob-val");
   const mgsnEl = sidebar.querySelector(".sidebar-mgsn-val");
   const icpEl  = sidebar.querySelector("#sidebar-icp-val");
-  if (icpEl && m.icpLive != null) icpEl.textContent = `$${m.icpLive.toFixed(2)}`;
+  if (icpEl) icpEl.textContent = typeof m.icpLive === "number" && Number.isFinite(m.icpLive) ? `$${m.icpLive.toFixed(2)}` : "—";
   if (bobEl)  bobEl.textContent  = fmt(m.last.bobPrice,  4);
   if (mgsnEl) mgsnEl.textContent = fmtTokenUsd(m.last.mgsnPrice);
 }
@@ -1042,8 +1150,12 @@ function render(app, dashboard, hydrationMode = "live") {
        )}
      </div>`;
   attachEvents(app, displayDashboard);
-  attachScenarioStudio(app, () => {
-    render(app, dashboard, loadScenarioState().demoMode ? "demo" : hydrationMode);
+  attachScenarioStudio(app, (action) => {
+    if (action?.type === "refresh" || action?.type === "clear-cache") {
+      window.location.reload();
+      return;
+    }
+    render(app, dashboard, hydrationMode);
   });
   updateSidebarPrices(m);
   // Canvas elements are in the DOM with explicit width/height attributes.
@@ -1055,8 +1167,8 @@ function render(app, dashboard, hydrationMode = "live") {
 
 async function bootstrap() {
   const app = document.querySelector("#app");
-  const cachedDashboard = readViewCache("dashboard");
-  let dashboard = cachedDashboard ?? demoDashboard;
+  const cachedDashboard = readViewCache(DASHBOARD_CACHE_KEY);
+  let dashboard = cachedDashboard ?? createUnavailableDashboard();
   if (dashboard.marketStats?.icpSpotLive) {
     state.liveIcpUsd = dashboard.timeline.at(-1)?.icpPrice ?? null;
   }
@@ -1071,7 +1183,7 @@ async function bootstrap() {
   const liveDashboard = await fetchDashboardData();
   if (liveDashboard) {
     dashboard = liveDashboard;
-    writeViewCache("dashboard", dashboard);
+    writeViewCache(DASHBOARD_CACHE_KEY, dashboard);
     state.liveIcpUsd = dashboard.marketStats?.icpSpotLive
       ? dashboard.timeline.at(-1)?.icpPrice ?? state.liveIcpUsd
       : state.liveIcpUsd;
@@ -1083,7 +1195,7 @@ async function bootstrap() {
   setInterval(async () => {
     const nextDashboard = await fetchDashboardData(true);
     if (nextDashboard) {
-      writeViewCache("dashboard", nextDashboard);
+      writeViewCache(DASHBOARD_CACHE_KEY, nextDashboard);
       state.liveIcpUsd = nextDashboard.marketStats?.icpSpotLive
         ? nextDashboard.timeline.at(-1)?.icpPrice ?? state.liveIcpUsd
         : state.liveIcpUsd;

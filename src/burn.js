@@ -21,7 +21,8 @@ Chart.register({
   },
 });
 
-import { demoDashboard, BURN_PROGRAM, TOKEN_CANISTERS } from "./demoData";
+import { BURN_PROGRAM, TOKEN_CANISTERS } from "./demoData";
+import { DEFAULT_BURN_CALC_AMOUNT } from "./liveDefaults.js";
 import { fetchICPSwapPrices } from "./liveData";
 import { fetchBurnProgramData } from "./onChainData.js";
 import { buildMobilePlatformNavHTML } from "./siteChrome.js";
@@ -40,19 +41,23 @@ import {
 
 const ICPSWAP_SWAP_URL =
   `https://app.icpswap.com/swap?input=${TOKEN_CANISTERS.ICP}&output=${TOKEN_CANISTERS.MGSN}`;
+const BURN_CACHE_KEY = "burn-page-live-v1";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
 function fmt(v, d = 2) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency", currency: "USD",
     minimumFractionDigits: d, maximumFractionDigits: d,
   }).format(v);
 }
 function compact(v) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(v);
 }
 function fmtNum(v) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return new Intl.NumberFormat("en-US").format(v);
 }
 
@@ -60,19 +65,27 @@ function fmtNum(v) {
 
 function computeBurnMetrics(mgsnNow, burnState) {
   const log = burnState?.log ?? [];
-  const totalBurned = burnState?.totalBurned ?? 0;
+  const totalBurned = typeof burnState?.totalBurned === "number" ? burnState.totalBurned : null;
   const supply = burnState?.originalSupply
     ?? burnState?.currentSupply
     ?? BURN_PROGRAM.totalSupply
-    ?? demoDashboard.mgsnSupply;
-  const pctBurned = supply > 0 ? (totalBurned / supply) * 100 : 0;
-  const remaining = burnState?.currentSupply ?? Math.max(supply - totalBurned, 0);
-  const valueDestroyed = totalBurned * mgsnNow;
+    ?? null;
+  const pctBurned = typeof supply === "number" && supply > 0 && typeof totalBurned === "number"
+    ? (totalBurned / supply) * 100
+    : null;
+  const remaining = burnState?.currentSupply ?? (typeof supply === "number" && typeof totalBurned === "number" ? Math.max(supply - totalBurned, 0) : null);
+  const valueDestroyed = typeof totalBurned === "number" && typeof mgsnNow === "number" && Number.isFinite(mgsnNow)
+    ? totalBurned * mgsnNow
+    : null;
 
   // Next milestone not yet reached
-  const nextMilestone = BURN_PROGRAM.milestones.find((m) => pctBurned < m.pct) ?? null;
-  const nextTarget    = nextMilestone ? Math.ceil(supply * nextMilestone.pct / 100) : null;
-  const toNextTarget  = nextTarget ? Math.max(nextTarget - totalBurned, 0) : 0;
+  const nextMilestone = typeof pctBurned === "number"
+    ? BURN_PROGRAM.milestones.find((m) => pctBurned < m.pct) ?? null
+    : null;
+  const nextTarget = nextMilestone && typeof supply === "number"
+    ? Math.ceil(supply * nextMilestone.pct / 100)
+    : null;
+  const toNextTarget = nextTarget && typeof totalBurned === "number" ? Math.max(nextTarget - totalBurned, 0) : null;
 
   // Leaderboard: sort descending by mgsnBurned, group by address
   const addrMap = {};
@@ -102,6 +115,17 @@ function computeBurnMetrics(mgsnNow, burnState) {
 }
 
 function priceImpactEstimate(burnAmount, supply, mgsnNow) {
+  if (
+    typeof burnAmount !== "number" ||
+    !Number.isFinite(burnAmount) ||
+    typeof supply !== "number" ||
+    !Number.isFinite(supply) ||
+    supply <= 0 ||
+    typeof mgsnNow !== "number" ||
+    !Number.isFinite(mgsnNow)
+  ) {
+    return null;
+  }
   // Simplified deflationary model: price impact ≈ (burn% × elasticity)
   // Conservative elasticity of 0.5 (50¢ price rise per 1% supply removed)
   const pct       = (burnAmount / supply) * 100;
@@ -179,10 +203,16 @@ function renderMilestoneChart(metrics) {
 function renderImpactCalc(metrics, mgsnNow) {
   const amountEl = document.getElementById("br-amount");
   if (!amountEl) return;
-  const amount = parseFloat(amountEl.value) || 100_000;
+  const amount = parseFloat(amountEl.value) || DEFAULT_BURN_CALC_AMOUNT;
   const impact = priceImpactEstimate(amount, metrics.supply, mgsnNow);
   const resEl  = document.getElementById("br-calc-results");
   if (!resEl) return;
+  if (!impact) {
+    resEl.innerHTML = `
+      <div class="br-calc-divider"></div>
+      <div class="br-calc-row br-calc-row--note"><span>Live supply and price data are required before the burn impact calculator can estimate scarcity impact.</span></div>`;
+    return;
+  }
   resEl.innerHTML = `
     <div class="br-calc-divider"></div>
     <div class="br-calc-row"><span class="br-calc-label">Tokens removed</span><span class="br-calc-val">${fmtNum(impact.burnAmount)} MGSN</span></div>
@@ -198,21 +228,21 @@ function renderImpactCalc(metrics, mgsnNow) {
 function buildHTML(metrics, mgsnNow, scenarioHeaderHtml, scenarioAmount) {
   const burnAddressReady = !!metrics.burnAddress;
   const burnAddressText = burnAddressReady ? metrics.burnAddress : "Unavailable";
-  const totalBurnedDisplay = metrics.totalBurned > 0 ? compact(metrics.totalBurned) : "0";
-  const pctDisplay         = metrics.pctBurned > 0 ? metrics.pctBurned.toFixed(4) + "%" : "0%";
-  const valueDisplay       = metrics.valueDestroyed > 0 ? fmt(metrics.valueDestroyed) : "$0.00";
+  const totalBurnedDisplay = typeof metrics.totalBurned === "number" && metrics.totalBurned > 0 ? compact(metrics.totalBurned) : metrics.totalBurned === 0 ? "0" : "Unavailable";
+  const pctDisplay = typeof metrics.pctBurned === "number" ? metrics.pctBurned.toFixed(4) + "%" : "Unavailable";
+  const valueDisplay = typeof metrics.valueDestroyed === "number" && metrics.valueDestroyed > 0 ? fmt(metrics.valueDestroyed) : metrics.valueDestroyed === 0 ? "$0.00" : "Unavailable";
   const txCount            = metrics.burnLog.length;
 
   // Milestone progress bars
   const milestoneBars = BURN_PROGRAM.milestones.map((m) => {
-    const fill    = Math.min((metrics.pctBurned / m.pct) * 100, 100);
-    const reached = metrics.pctBurned >= m.pct;
+    const fill = typeof metrics.pctBurned === "number" ? Math.min((metrics.pctBurned / m.pct) * 100, 100) : 0;
+    const reached = typeof metrics.pctBurned === "number" && metrics.pctBurned >= m.pct;
     return `
       <div class="br-milestone-row">
         <div class="br-milestone-header">
           <span class="br-milestone-badge${reached ? " br-milestone-badge--reached" : ""}">${m.badge}</span>
           <span class="br-milestone-label">${m.label} of supply</span>
-          <span class="br-milestone-target">${fmtNum(Math.ceil(metrics.supply * m.pct / 100))} MGSN</span>
+          <span class="br-milestone-target">${typeof metrics.supply === "number" ? `${fmtNum(Math.ceil(metrics.supply * m.pct / 100))} MGSN` : "Unavailable"}</span>
         </div>
         <div class="br-progress-track">
           <div class="br-progress-fill${reached ? " br-progress-fill--reached" : ""}" style="width:${fill.toFixed(2)}%"></div>
@@ -233,7 +263,7 @@ function buildHTML(metrics, mgsnNow, scenarioHeaderHtml, scenarioAmount) {
           <td class="br-rank">${rank}</td>
           <td class="br-addr mono">${shortAddr}</td>
           <td class="fire">${fmtNum(row.totalBurned)} MGSN</td>
-          <td class="br-pct">${((row.totalBurned / metrics.supply) * 100).toFixed(4)}%</td>
+          <td class="br-pct">${typeof metrics.supply === "number" ? `${((row.totalBurned / metrics.supply) * 100).toFixed(4)}%` : "—"}</td>
           <td class="muted">${row.txCount}</td>
           <td class="muted">${row.lastDate}</td>
         </tr>`;
@@ -250,7 +280,7 @@ function buildHTML(metrics, mgsnNow, scenarioHeaderHtml, scenarioAmount) {
         <div class="br-hall-rank">#${i + 1}</div>
         <div class="br-hall-addr mono">${shortAddr}</div>
         <div class="br-hall-amount">${compact(row.totalBurned)} MGSN</div>
-        <div class="br-hall-pct fire">${((row.totalBurned / metrics.supply) * 100).toFixed(3)}% of supply</div>
+        <div class="br-hall-pct fire">${typeof metrics.supply === "number" ? `${((row.totalBurned / metrics.supply) * 100).toFixed(3)}% of supply` : "Supply unavailable"}</div>
       </div>`;
   }).join("") || `<div class="br-hall-empty">The Hall of Flame awaits its first hero. Burn MGSN to take the top spot.</div>`;
 
@@ -309,11 +339,11 @@ function buildHTML(metrics, mgsnNow, scenarioHeaderHtml, scenarioAmount) {
             </div>
             <div class="br-stat">
               <span class="br-stat-label">Remaining supply</span>
-              <span class="br-stat-val">${compact(metrics.remaining)} MGSN</span>
+              <span class="br-stat-val">${metrics.remaining != null ? `${compact(metrics.remaining)} MGSN` : "Unavailable"}</span>
             </div>
             <div class="br-stat">
               <span class="br-stat-label">Blackhole balance</span>
-              <span class="br-stat-val fire">${compact(metrics.burnAddressBalance)} MGSN</span>
+              <span class="br-stat-val fire">${metrics.burnAddressBalance != null ? `${compact(metrics.burnAddressBalance)} MGSN` : "Unavailable"}</span>
             </div>
           </div>
           <div class="br-coming-soon-banner">
@@ -668,9 +698,9 @@ async function bootstrap() {
   document.head.appendChild(styleEl);
 
   const app = document.querySelector("#app");
-  const cachedState = readViewCache("burn-page");
+  const cachedState = readViewCache(BURN_CACHE_KEY);
   let baseState = buildBurnBaseState(cachedState ?? {});
-  renderBurnPage(app, baseState, cachedState ? "cached" : "fallback");
+  renderBurnPage(app, baseState, cachedState ? "cached" : "loading");
 
   const [liveIcpswapResult, liveBurnResult] = await Promise.allSettled([
     fetchICPSwapPrices(),
@@ -681,8 +711,14 @@ async function bootstrap() {
     mgsnNow: liveIcpswapResult.value?.mgsnUsd ?? baseState.mgsnNow,
     burnState: liveBurnResult.value ?? baseState.burnState,
   });
-  writeViewCache("burn-page", baseState);
-  renderBurnPage(app, baseState, "live");
+  writeViewCache(BURN_CACHE_KEY, baseState);
+  const hasLivePayload = Boolean(
+    baseState.mgsnNow != null ||
+    baseState.burnState?.status === "live" ||
+    baseState.burnState?.totalBurned != null ||
+    baseState.burnState?.currentSupply != null
+  );
+  renderBurnPage(app, baseState, hasLivePayload ? "live" : cachedState ? "cached" : "fallback");
 }
 
 bootstrap();
@@ -691,10 +727,10 @@ function fallbackBurnState() {
   return {
     status: "unavailable",
     burnAddress: BURN_PROGRAM.burnAddress,
-    burnAddressBalance: 0,
-    currentSupply: demoDashboard.mgsnSupply,
-    originalSupply: demoDashboard.mgsnSupply,
-    totalBurned: 0,
+    burnAddressBalance: null,
+    currentSupply: null,
+    originalSupply: null,
+    totalBurned: null,
     log: [],
     note: "MGSN burn history is temporarily unavailable.",
   };
@@ -702,7 +738,7 @@ function fallbackBurnState() {
 
 function buildBurnBaseState(raw = {}) {
   return {
-    mgsnNow: raw.mgsnNow ?? demoDashboard.timeline.at(-1).mgsnPrice,
+    mgsnNow: raw.mgsnNow ?? null,
     burnState: raw.burnState ?? fallbackBurnState(),
   };
 }
@@ -742,15 +778,21 @@ function renderBurnPage(app, baseState, hydrationMode) {
   setupCopyBtn("br-copy-addr", "br-burn-addr");
   setupCopyBtn("br-copy-addr-2", "br-burn-addr-2");
 
-  attachScenarioStudio(app, () => {
-    renderBurnPage(app, baseState, loadScenarioState().demoMode ? "demo" : hydrationMode);
+  attachScenarioStudio(app, (action) => {
+    if (action?.type === "refresh" || action?.type === "clear-cache") {
+      window.location.reload();
+      return;
+    }
+    renderBurnPage(app, baseState, hydrationMode);
   });
 
   const priceEl = document.getElementById("br-mgsn-price");
-  if (priceEl && prices.mgsnUsd) {
-    priceEl.textContent = new Intl.NumberFormat("en-US", {
+  if (priceEl) {
+    priceEl.textContent = typeof prices.mgsnUsd === "number" && Number.isFinite(prices.mgsnUsd)
+      ? new Intl.NumberFormat("en-US", {
       style: "currency", currency: "USD",
       minimumFractionDigits: 7, maximumFractionDigits: 7,
-    }).format(prices.mgsnUsd);
+    }).format(prices.mgsnUsd)
+      : "—";
   }
 }

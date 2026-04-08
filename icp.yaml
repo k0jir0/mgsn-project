@@ -6,6 +6,27 @@ canisters:
           commands:
             - cp backend/backend.wasm "$ICP_WASM_OUTPUT_PATH"
 
+  - name: treasury
+    build:
+      steps:
+        - type: script
+          commands:
+            - node scripts/build-canister.mjs treasury "$ICP_WASM_OUTPUT_PATH"
+
+  - name: subscriptions
+    build:
+      steps:
+        - type: script
+          commands:
+            - node scripts/build-canister.mjs subscriptions "$ICP_WASM_OUTPUT_PATH"
+
+  - name: analytics
+    build:
+      steps:
+        - type: script
+          commands:
+            - node scripts/build-canister.mjs analytics "$ICP_WASM_OUTPUT_PATH"
+
   - name: frontend
     recipe:
       type: "@dfinity/asset-canister@v2.1.0"

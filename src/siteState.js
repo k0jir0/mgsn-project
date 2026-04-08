@@ -1,41 +1,13 @@
-import {
-  BURN_PROGRAM,
-  BUYBACK_PROGRAM,
-  STAKING_PROGRAM,
-  demoDashboard,
-} from "./demoData.js";
+import { BURN_PROGRAM } from "./demoData.js";
 
 const SCENARIO_KEY = "mgsn-scenario-v2";
 const CACHE_PREFIX = "mgsn-view-cache:";
 
 const DEFAULT_SCENARIO_STATE = Object.freeze({
-  demoMode: false,
-  priceMgsnUsd: null,
-  priceBobUsd: null,
-  priceIcpUsd: null,
-  monthlyVolumeUsd: null,
-  poolLiquidityUsd: null,
+  controlsOpen: false,
   portfolioHoldings: 1_000_000,
   portfolioAvgCost: 0.000014,
-  simulatedBuybackUsd: 1_800,
-  simulatedBuybackCount: 4,
-  simulatedStakedMgsn: 125_000_000,
-  simulatedBurnAmount: 5_000_000,
-});
-
-const SHOWCASE_SCENARIO_STATE = Object.freeze({
-  demoMode: true,
-  priceMgsnUsd: 0.000022,
-  priceBobUsd: 0.315,
-  priceIcpUsd: 4.85,
-  monthlyVolumeUsd: 860_000,
-  poolLiquidityUsd: 190_000,
-  portfolioHoldings: 5_000_000,
-  portfolioAvgCost: 0.0000132,
-  simulatedBuybackUsd: 1_800,
-  simulatedBuybackCount: 4,
-  simulatedStakedMgsn: 125_000_000,
-  simulatedBurnAmount: 5_000_000,
+  simulatedBurnAmount: 100_000,
 });
 
 function hasWindow() {
@@ -62,25 +34,11 @@ function optionalNumber(value, fallback = null) {
   return Number.isFinite(num) ? num : fallback;
 }
 
-function positiveWholeNumber(value, fallback) {
-  const num = optionalNumber(value, fallback);
-  if (!Number.isFinite(num)) return fallback;
-  return Math.max(1, Math.round(num));
-}
-
 function scenarioFrom(input = {}) {
   return {
-    demoMode: !!input.demoMode,
-    priceMgsnUsd: optionalNumber(input.priceMgsnUsd),
-    priceBobUsd: optionalNumber(input.priceBobUsd),
-    priceIcpUsd: optionalNumber(input.priceIcpUsd),
-    monthlyVolumeUsd: optionalNumber(input.monthlyVolumeUsd),
-    poolLiquidityUsd: optionalNumber(input.poolLiquidityUsd),
+    controlsOpen: !!input.controlsOpen,
     portfolioHoldings: Math.max(0, optionalNumber(input.portfolioHoldings, DEFAULT_SCENARIO_STATE.portfolioHoldings)),
     portfolioAvgCost: Math.max(0, optionalNumber(input.portfolioAvgCost, DEFAULT_SCENARIO_STATE.portfolioAvgCost)),
-    simulatedBuybackUsd: Math.max(0, optionalNumber(input.simulatedBuybackUsd, DEFAULT_SCENARIO_STATE.simulatedBuybackUsd)),
-    simulatedBuybackCount: positiveWholeNumber(input.simulatedBuybackCount, DEFAULT_SCENARIO_STATE.simulatedBuybackCount),
-    simulatedStakedMgsn: Math.max(0, optionalNumber(input.simulatedStakedMgsn, DEFAULT_SCENARIO_STATE.simulatedStakedMgsn)),
     simulatedBurnAmount: Math.max(0, optionalNumber(input.simulatedBurnAmount, DEFAULT_SCENARIO_STATE.simulatedBurnAmount)),
   };
 }
@@ -133,12 +91,20 @@ export function saveScenarioState(nextState) {
   return normalized;
 }
 
-export function loadShowcaseScenario() {
-  return saveScenarioState(SHOWCASE_SCENARIO_STATE);
-}
-
 export function clearScenarioState() {
   return saveScenarioState(DEFAULT_SCENARIO_STATE);
+}
+
+function clearAllViewCaches() {
+  if (!hasWindow()) return;
+
+  try {
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith(CACHE_PREFIX))
+      .forEach((key) => window.localStorage.removeItem(key));
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 export function readViewCache(key, maxAgeMs = 6 * 60 * 60 * 1000) {
@@ -183,8 +149,8 @@ export function buildDataStatusHTML({
       : hydration === "cached"
         ? sourceChip("cache", "Cached first paint")
         : hydration === "fallback"
-          ? sourceChip("fallback", "Fallback snapshot")
-          : sourceChip("demo", "Scenario showcase");
+          ? sourceChip("fallback", "Live data unavailable")
+          : sourceChip("fallback", "Live data unavailable");
 
   const renderedChips = [hydrationChip, ...chips].join("");
   const updatedLabel = updatedAt != null && hydration !== "loading"
@@ -199,112 +165,96 @@ export function buildDataStatusHTML({
 }
 
 export function buildScenarioStudioHTML({
-  heading = "Scenario Studio",
-  description = "Shared demo controls saved across all MGSN pages.",
-  note = "Use live mode for real canister data, or enable the showcase to demonstrate the full tokenomics stack.",
+  heading = "Live Controls",
+  description = "Open the drawer to refresh live data, clear cached first-paint state, or update local calculator defaults.",
+  note = "These inputs only prefill calculators on this browser. Market, pool, buyback, staking, and burn state stay locked to live ICPSwap and on-chain sources.",
 } = {}) {
   const state = loadScenarioState();
+  const controlsState = state.controlsOpen ? "true" : "false";
   return `
     <section class="studio-section" data-studio-root>
       <div class="studio-shell">
-        <div class="studio-head">
-          <div>
-            <p class="studio-eyebrow">Shared Demo Controls</p>
-            <h3 class="studio-title">${heading}</h3>
-            <p class="studio-copy">${description}</p>
+        <button
+          class="studio-tab"
+          type="button"
+          data-studio-action="toggle"
+          aria-expanded="${controlsState}"
+        >
+          <span class="studio-tab-copy">
+            <span class="studio-eyebrow">Live-only site controls</span>
+            <span class="studio-title">${heading}</span>
+            <span class="studio-copy">${description}</span>
+          </span>
+          <span class="studio-tab-meta">${state.controlsOpen ? "Collapse" : "Open"}</span>
+        </button>
+        <div class="studio-panel" data-studio-panel${state.controlsOpen ? "" : " hidden"}>
+          <div class="studio-head">
+            <div>
+              <p class="studio-eyebrow">Local calculator defaults</p>
+              <p class="studio-copy">${note}</p>
+            </div>
+            <div class="studio-head-chips">
+              ${sourceChip("live", "Live-only data")}
+              ${sourceChip("cache", "Refresh available")}
+            </div>
           </div>
-          <div class="studio-head-chips">
-            ${state.demoMode ? sourceChip("demo", "Showcase active") : sourceChip("live", "Live mode")}
-            ${sourceChip("projected", "Overrides are clearly labeled")}
+          <div class="studio-grid" data-studio-form>
+            <label class="studio-field">
+              <span class="studio-label">Portfolio holdings</span>
+              <input class="studio-input" type="number" min="0" step="100000" data-studio-field="portfolioHoldings" value="${state.portfolioHoldings}">
+              <span class="studio-help">Prefills the strategy portfolio calculator on this device only.</span>
+            </label>
+            <label class="studio-field">
+              <span class="studio-label">Portfolio avg cost</span>
+              <input class="studio-input" type="number" min="0" step="0.000001" data-studio-field="portfolioAvgCost" value="${state.portfolioAvgCost}">
+              <span class="studio-help">Used for your personal P&amp;L modeling only.</span>
+            </label>
+            <label class="studio-field">
+              <span class="studio-label">Burn calculator default</span>
+              <input class="studio-input" type="number" min="0" step="10000" data-studio-field="simulatedBurnAmount" value="${state.simulatedBurnAmount}">
+              <span class="studio-help">Seeds the burn impact calculator without altering live burn totals.</span>
+            </label>
+            <div class="studio-field studio-field--static">
+              <span class="studio-label">Market data policy</span>
+              <p class="studio-help">Price, liquidity, volume, buyback, staking, and burn status cannot be overridden here. This drawer only manages refresh behavior and local input defaults.</p>
+            </div>
+          </div>
+          <div class="studio-actions">
+            <button class="studio-btn studio-btn--primary" type="button" data-studio-action="save">Save defaults</button>
+            <button class="studio-btn" type="button" data-studio-action="refresh">Refresh live data</button>
+            <button class="studio-btn" type="button" data-studio-action="clear-cache">Clear cached data</button>
+            <button class="studio-btn" type="button" data-studio-action="reset">Reset defaults</button>
           </div>
         </div>
-        <div class="studio-grid" data-studio-form>
-          <label class="studio-field studio-field--toggle">
-            <span class="studio-label">Demo showcase</span>
-            <input type="checkbox" data-studio-field="demoMode"${state.demoMode ? " checked" : ""}>
-            <span class="studio-help">Turns on simulated buyback and staking records while keeping burn data live.</span>
-          </label>
-          <label class="studio-field">
-            <span class="studio-label">MGSN / USD</span>
-            <input class="studio-input" type="number" min="0" step="0.000001" data-studio-field="priceMgsnUsd" value="${state.priceMgsnUsd ?? ""}">
-          </label>
-          <label class="studio-field">
-            <span class="studio-label">BOB / USD</span>
-            <input class="studio-input" type="number" min="0" step="0.0001" data-studio-field="priceBobUsd" value="${state.priceBobUsd ?? ""}">
-          </label>
-          <label class="studio-field">
-            <span class="studio-label">ICP / USD</span>
-            <input class="studio-input" type="number" min="0" step="0.01" data-studio-field="priceIcpUsd" value="${state.priceIcpUsd ?? ""}">
-          </label>
-          <label class="studio-field">
-            <span class="studio-label">30d MGSN volume (USD)</span>
-            <input class="studio-input" type="number" min="0" step="1000" data-studio-field="monthlyVolumeUsd" value="${state.monthlyVolumeUsd ?? ""}">
-          </label>
-          <label class="studio-field">
-            <span class="studio-label">Pool liquidity (USD)</span>
-            <input class="studio-input" type="number" min="0" step="1000" data-studio-field="poolLiquidityUsd" value="${state.poolLiquidityUsd ?? ""}">
-          </label>
-          <label class="studio-field">
-            <span class="studio-label">Portfolio holdings</span>
-            <input class="studio-input" type="number" min="0" step="100000" data-studio-field="portfolioHoldings" value="${state.portfolioHoldings}">
-          </label>
-          <label class="studio-field">
-            <span class="studio-label">Portfolio avg cost</span>
-            <input class="studio-input" type="number" min="0" step="0.000001" data-studio-field="portfolioAvgCost" value="${state.portfolioAvgCost}">
-          </label>
-          <label class="studio-field">
-            <span class="studio-label">Demo buyback / month (USD)</span>
-            <input class="studio-input" type="number" min="0" step="100" data-studio-field="simulatedBuybackUsd" value="${state.simulatedBuybackUsd}">
-          </label>
-          <label class="studio-field">
-            <span class="studio-label">Demo buyback count</span>
-            <input class="studio-input" type="number" min="1" step="1" data-studio-field="simulatedBuybackCount" value="${state.simulatedBuybackCount}">
-          </label>
-          <label class="studio-field">
-            <span class="studio-label">Demo staked MGSN</span>
-            <input class="studio-input" type="number" min="0" step="1000000" data-studio-field="simulatedStakedMgsn" value="${state.simulatedStakedMgsn}">
-          </label>
-          <label class="studio-field">
-            <span class="studio-label">Default burn sim amount</span>
-            <input class="studio-input" type="number" min="0" step="10000" data-studio-field="simulatedBurnAmount" value="${state.simulatedBurnAmount}">
-          </label>
-        </div>
-        <div class="studio-actions">
-          <button class="studio-btn studio-btn--primary" type="button" data-studio-action="apply">Apply Scenario</button>
-          <button class="studio-btn" type="button" data-studio-action="showcase">Load Showcase</button>
-          <button class="studio-btn" type="button" data-studio-action="live">Use Live Data</button>
-          <button class="studio-btn" type="button" data-studio-action="reset">Reset Inputs</button>
-        </div>
-        <p class="studio-note">${note}</p>
       </div>
     </section>`;
 }
 
 const SCENARIO_HEADER_CONTENT = Object.freeze({
   dashboard: {
-    heading: "Dashboard Demo Controls",
-    description: "Scenario Studio persists across the whole site, so chart, strategy, buyback, staking, and burn assumptions stay in sync.",
-    note: "Use the showcase preset to demonstrate the full product loop, or keep live mode enabled to inspect current ICPSwap and ledger-backed data.",
+    heading: "Dashboard Live Controls",
+    description: "Refresh the live dashboard feed or clear cached first-paint state without opening developer tools.",
+    note: "Use this drawer to refresh market data or adjust your local calculator defaults. Dashboard prices and history stay tied to live ICPSwap and ledger reads.",
   },
   strategy: {
-    heading: "Strategy Demo Controls",
-    description: "Keep live chart history, but synchronize the signal engine, LP assumptions, and portfolio defaults with the same shared scenario state used everywhere else.",
-    note: "Scenario Studio persists across the dashboard, strategy, buyback, staking, and burn pages so one showcase story stays internally consistent.",
+    heading: "Strategy Live Controls",
+    description: "Refresh live prices and keep your local portfolio defaults synced into the strategy calculators.",
+    note: "These defaults only affect your local calculators. Signal inputs, LP stats, and charts still come from live ICPSwap data.",
   },
   buyback: {
-    heading: "Buyback Demo Controls",
-    description: "Use one shared showcase state to demonstrate launch-day buyback activity before the public vault address is published.",
-    note: "Live ICPSwap volume still powers the calculator whenever it is available. Demo mode only simulates the execution history and hero totals.",
+    heading: "Buyback Live Controls",
+    description: "Refresh the vault status and pool-derived calculator inputs from the current live sources.",
+    note: "Buyback history is limited to verifiable public vault activity and live pool data. This drawer does not create simulated fills.",
   },
   staking: {
-    heading: "Staking Demo Controls",
-    description: "Switch between live reward assumptions and a simulated staking book so the lock-tier experience is fully demonstrable.",
-    note: "Until the public staking canister is published, Scenario Studio provides a clearly labeled simulated position book instead of pretending that empty arrays are live staking activity.",
+    heading: "Staking Live Controls",
+    description: "Refresh the live staking status and keep your local calculator defaults available inside the estimator.",
+    note: "Reward estimates use live pool activity when available. Position state is shown only when the public staking program exposes real data.",
   },
   burn: {
-    heading: "Burn Demo Controls",
-    description: "Keep the burn history live while synchronizing the burn simulator with the same cross-page scenario state.",
-    note: "The burn leaderboard and totals remain ledger-indexed. Scenario Studio only controls the calculator defaults and any optional price overrides.",
+    heading: "Burn Live Controls",
+    description: "Refresh ledger-indexed burn history and adjust the default amount used in the burn impact calculator.",
+    note: "The burn leaderboard and totals stay ledger-indexed. Only the calculator default is stored locally here.",
   },
 });
 
@@ -334,148 +284,82 @@ function collectScenarioState(root) {
 export function attachScenarioStudio(root, onApply) {
   const studioRoot = root.querySelector("[data-studio-root]");
   if (!studioRoot) return;
+  const panel = studioRoot.querySelector("[data-studio-panel]");
+  const toggleButton = studioRoot.querySelector('[data-studio-action="toggle"]');
 
-  studioRoot.querySelector('[data-studio-action="apply"]')?.addEventListener("click", () => {
-    onApply?.(saveScenarioState(collectScenarioState(studioRoot)));
+  function dispatch(action) {
+    onApply?.(action);
+  }
+
+  toggleButton?.addEventListener("click", () => {
+    const nextState = saveScenarioState({
+      ...loadScenarioState(),
+      controlsOpen: !loadScenarioState().controlsOpen,
+    });
+    const expanded = nextState.controlsOpen;
+    toggleButton.setAttribute("aria-expanded", expanded ? "true" : "false");
+    const meta = toggleButton.querySelector(".studio-tab-meta");
+    if (meta) meta.textContent = expanded ? "Collapse" : "Open";
+    if (panel) panel.hidden = !expanded;
   });
 
-  studioRoot.querySelector('[data-studio-action="showcase"]')?.addEventListener("click", () => {
-    onApply?.(loadShowcaseScenario());
+  studioRoot.querySelector('[data-studio-action="save"]')?.addEventListener("click", () => {
+    dispatch({ type: "save", state: saveScenarioState(collectScenarioState(studioRoot)) });
   });
 
-  studioRoot.querySelector('[data-studio-action="live"]')?.addEventListener("click", () => {
-    const current = loadScenarioState();
-    onApply?.(
-      saveScenarioState({
-        ...current,
-        demoMode: false,
-        priceMgsnUsd: null,
-        priceBobUsd: null,
-        priceIcpUsd: null,
-        monthlyVolumeUsd: null,
-        poolLiquidityUsd: null,
-      })
-    );
+  studioRoot.querySelector('[data-studio-action="refresh"]')?.addEventListener("click", () => {
+    dispatch({ type: "refresh", state: loadScenarioState() });
+  });
+
+  studioRoot.querySelector('[data-studio-action="clear-cache"]')?.addEventListener("click", () => {
+    clearAllViewCaches();
+    dispatch({ type: "clear-cache", state: loadScenarioState() });
   });
 
   studioRoot.querySelector('[data-studio-action="reset"]')?.addEventListener("click", () => {
-    onApply?.(clearScenarioState());
+    dispatch({ type: "reset", state: clearScenarioState() });
   });
 }
 
 export function applyScenarioToDashboard(dashboard, scenario = loadScenarioState()) {
-  const next = {
+  void scenario;
+  return {
     ...dashboard,
-    timeline: (dashboard.timeline ?? []).map((point) => ({ ...point })),
-    marketStats: { ...(dashboard.marketStats ?? {}) },
+    timeline: (dashboard?.timeline ?? []).map((point) => ({ ...point })),
+    marketStats: { ...(dashboard?.marketStats ?? {}) },
   };
-
-  const livePoint = next.timeline.at(-1);
-  if (livePoint) {
-    if (scenario.priceIcpUsd != null) livePoint.icpPrice = scenario.priceIcpUsd;
-    if (scenario.priceBobUsd != null) livePoint.bobPrice = scenario.priceBobUsd;
-    if (scenario.priceMgsnUsd != null) livePoint.mgsnPrice = scenario.priceMgsnUsd;
-    if (scenario.monthlyVolumeUsd != null) livePoint.mgsnVolume = scenario.monthlyVolumeUsd / 30;
-  }
-
-  if (scenario.priceIcpUsd != null) next.marketStats.icpSpotLive = true;
-  if (scenario.monthlyVolumeUsd != null) next.marketStats.mgsnVol30d = scenario.monthlyVolumeUsd;
-  if (scenario.poolLiquidityUsd != null) next.marketStats.totalLiquidityUsd = scenario.poolLiquidityUsd;
-  if (scenario.demoMode) {
-    next.heroNote = "Scenario Studio showcase active. Projected buyback and staking states are being demonstrated alongside live burn data.";
-  }
-  return next;
 }
 
 export function applyScenarioToPrices(prices = {}, scenario = loadScenarioState()) {
+  void scenario;
   return {
     ...prices,
-    icpUsd: scenario.priceIcpUsd ?? prices.icpUsd ?? demoDashboard.timeline.at(-1)?.icpPrice ?? null,
-    bobUsd: scenario.priceBobUsd ?? prices.bobUsd ?? demoDashboard.timeline.at(-1)?.bobPrice ?? null,
-    mgsnUsd: scenario.priceMgsnUsd ?? prices.mgsnUsd ?? demoDashboard.timeline.at(-1)?.mgsnPrice ?? null,
   };
 }
 
 export function applyScenarioToPoolStats(poolStats = {}, scenario = loadScenarioState()) {
-  const next = { ...poolStats };
-  if (scenario.monthlyVolumeUsd != null) {
-    next.mgsnVol30d = scenario.monthlyVolumeUsd;
-    next.mgsnVol24h = scenario.monthlyVolumeUsd / 30;
-  }
-  if (scenario.poolLiquidityUsd != null) {
-    next.mgsnLiq = scenario.poolLiquidityUsd;
-  }
-  return next;
-}
-
-function isoDateMonthsAgo(monthsAgo) {
-  const dt = new Date();
-  dt.setUTCDate(1);
-  dt.setUTCMonth(dt.getUTCMonth() - monthsAgo);
-  return dt.toISOString().slice(0, 10);
-}
-
-function compactAddress(seed) {
-  return `demo${String(seed).padStart(2, "0")}-showcase-addr`;
+  void scenario;
+  return { ...poolStats };
 }
 
 export function buildSimulatedBuybackState(
-  currentSupply = demoDashboard.mgsnSupply,
-  mgsnUsd = demoDashboard.timeline.at(-1)?.mgsnPrice ?? 0.000014,
+  currentSupply = null,
+  mgsnUsd = null,
   scenario = loadScenarioState()
 ) {
-  if (!scenario.demoMode) return null;
-
-  const count = Math.max(1, scenario.simulatedBuybackCount);
-  const usdPerBuyback = Math.max(0, scenario.simulatedBuybackUsd);
-  const tokenPrice = Math.max(mgsnUsd, 0.0000001);
-  const log = Array.from({ length: count }, (_, index) => ({
-    date: isoDateMonthsAgo(count - index),
-    usdSpent: usdPerBuyback,
-    usdBasis: "simulated",
-    mgsnAcquired: usdPerBuyback / tokenPrice,
-    txId: "",
-    note: index === count - 1 ? "Scenario Studio showcase execution" : "Projected monthly buyback",
-  }));
-  const totalBurned = log.reduce((sum, item) => sum + item.mgsnAcquired, 0);
-
-  return {
-    status: "simulated",
-    currentSupply: Math.max(currentSupply - totalBurned, 0),
-    log,
-    note: "Scenario Studio showcase: simulated buyback executions so the full launch UI can be demonstrated before the public vault address is published.",
-  };
+  void currentSupply;
+  void mgsnUsd;
+  void scenario;
+  return null;
 }
 
 export function buildSimulatedStakingState(
-  currentSupply = demoDashboard.mgsnSupply,
+  currentSupply = null,
   scenario = loadScenarioState()
 ) {
-  if (!scenario.demoMode) return null;
-
-  const totalLocked = Math.max(0, scenario.simulatedStakedMgsn);
-  const weights = [0.12, 0.18, 0.28, 0.42];
-  const positions = STAKING_PROGRAM.tiers.map((tier, index) => {
-    const amount = totalLocked * weights[index];
-    const lockedDate = isoDateMonthsAgo(index + 1);
-    const unlock = new Date(`${lockedDate}T00:00:00Z`);
-    unlock.setUTCDate(unlock.getUTCDate() + tier.days);
-    return {
-      address: compactAddress(index + 1),
-      mgsnLocked: amount,
-      tier: tier.label,
-      lockedDate,
-      unlockDate: unlock.toISOString().slice(0, 10),
-    };
-  });
-
-  return {
-    status: "simulated",
-    currentSupply,
-    totalLocked,
-    positions,
-    note: "Scenario Studio showcase: simulated staking positions demonstrate the live UI while the public staking canister is still pending.",
-  };
+  void currentSupply;
+  void scenario;
+  return null;
 }
 
 export function getPortfolioDefaults(scenario = loadScenarioState()) {
@@ -490,6 +374,7 @@ export function getBurnScenarioAmount(scenario = loadScenarioState()) {
 }
 
 export function buildDashboardSourceChips(dashboard, scenario, hydration) {
+  void scenario;
   const chips = [];
   if (dashboard.marketStats?.historyStartLabel) {
     chips.push(sourceChip("live", "ICPSwap history"));
@@ -498,11 +383,7 @@ export function buildDashboardSourceChips(dashboard, scenario, hydration) {
   } else if (hydration === "cached") {
     chips.push(sourceChip("cache", "Refreshing history"));
   } else {
-    chips.push(sourceChip("fallback", "Fallback history"));
-  }
-  if (scenario.demoMode) chips.push(sourceChip("demo", "Demo showcase"));
-  if (scenario.monthlyVolumeUsd != null || scenario.poolLiquidityUsd != null) {
-    chips.push(sourceChip("projected", "Scenario overrides"));
+    chips.push(sourceChip("fallback", "History unavailable"));
   }
   return buildDataStatusHTML({
     hydration,
@@ -512,15 +393,13 @@ export function buildDashboardSourceChips(dashboard, scenario, hydration) {
 }
 
 export function buildBuybackSourceChips(buybackState, scenario, hydration) {
+  void scenario;
   const chips = [];
-  if (buybackState?.status === "simulated") chips.push(sourceChip("demo", "Simulated buyback log"));
-  else if (buybackState?.status === "unconfigured") chips.push(sourceChip("projected", "Vault not published"));
+  if (buybackState?.status === "unconfigured") chips.push(sourceChip("projected", "Vault not published"));
+  else if (buybackState?.status === "unavailable") chips.push(sourceChip("fallback", "Ledger scan unavailable"));
   else chips.push(sourceChip("live", "On-chain ledger scan"));
   if ((buybackState?.log ?? []).some((entry) => entry.usdBasis === "estimated_pool_snapshot")) {
-    chips.push(sourceChip("projected", "USD valued from pool snapshots"));
-  }
-  if (scenario.monthlyVolumeUsd != null || scenario.poolLiquidityUsd != null) {
-    chips.push(sourceChip("projected", "Scenario overrides"));
+    chips.push(sourceChip("projected", "USD valued from live pool snapshots"));
   }
   return buildDataStatusHTML({
     hydration,
@@ -530,14 +409,11 @@ export function buildBuybackSourceChips(buybackState, scenario, hydration) {
 }
 
 export function buildStakingSourceChips(stakingState, scenario, hydration) {
+  void scenario;
   const chips = [];
-  if (stakingState?.status === "simulated") chips.push(sourceChip("demo", "Simulated staking book"));
+  if (stakingState?.status === "live") chips.push(sourceChip("live", "On-chain staking state"));
   else if (stakingState?.status === "configured") chips.push(sourceChip("projected", "Canister published"));
-  else if (stakingState?.status === "prelaunch") chips.push(sourceChip("projected", "Launch preview"));
-  else chips.push(sourceChip("live", "On-chain staking state"));
-  if (scenario.monthlyVolumeUsd != null || scenario.poolLiquidityUsd != null) {
-    chips.push(sourceChip("projected", "Scenario overrides"));
-  }
+  else chips.push(sourceChip("fallback", "Live staking state unavailable"));
   return buildDataStatusHTML({
     hydration,
     updatedAt: BigInt(Date.now()) * 1_000_000n,
@@ -546,8 +422,9 @@ export function buildStakingSourceChips(stakingState, scenario, hydration) {
 }
 
 export function buildBurnSourceChips(metrics, scenario, hydration) {
+  void metrics;
+  void scenario;
   const chips = [sourceChip("live", "Ledger-indexed burns"), sourceChip("projected", "Modeled impact calculator")];
-  if (scenario.simulatedBurnAmount > 0) chips.push(sourceChip("demo", "Scenario burn input"));
   return buildDataStatusHTML({
     hydration,
     updatedAt: BigInt(Date.now()) * 1_000_000n,
@@ -555,8 +432,4 @@ export function buildBurnSourceChips(metrics, scenario, hydration) {
   });
 }
 
-export const STUDIO_CONSTANTS = {
-  BUYBACK_PROGRAM,
-  STAKING_PROGRAM,
-  BURN_PROGRAM,
-};
+export const STUDIO_CONSTANTS = { BURN_PROGRAM };

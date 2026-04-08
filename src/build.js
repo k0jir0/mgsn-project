@@ -5,8 +5,8 @@ import {
   BUYBACK_PROGRAM,
   PROGRAM_ADDRESSES,
   TOKEN_CANISTERS,
-  demoDashboard,
 } from "./demoData.js";
+import { createUnavailableDashboard, getDashboardLastPoint } from "./liveDefaults.js";
 import {
   fetchDashboardData,
   fetchICPSwapPoolStats,
@@ -27,7 +27,7 @@ if (!app) {
   throw new Error("Missing #app root");
 }
 
-const BUILD_CACHE_KEY = "build-module";
+const BUILD_CACHE_KEY = "build-module-live-v1";
 const BUILD_CACHE_AGE_MS = 10 * 60 * 1000;
 const ICP_TO_BOB_SWAP_URL = `https://app.icpswap.com/swap?input=${TOKEN_CANISTERS.ICP}&output=${TOKEN_CANISTERS.BOB}`;
 
@@ -135,8 +135,8 @@ function defaultStakingState() {
     totalLocked: 0,
     totalWeight: 0,
     note: PROGRAM_ADDRESSES.stakingCanisterId
-      ? "A public staking canister is configured. Publish position methods to upgrade from launch preview to live positions."
-      : "The staking contract has not been published yet. This page remains in launch-preview mode until a public canister is available.",
+      ? "A public staking canister is configured. Publish position methods to upgrade from configuration status to live positions."
+      : "No public staking canister has been published yet.",
   };
 }
 
@@ -166,7 +166,7 @@ function deriveMarketBadge(hasLiveMarket, hydration) {
     return { label: "refreshing market feed", tone: "preview" };
   }
 
-  return { label: "snapshot fallback", tone: "preview" };
+  return { label: "market feed unavailable", tone: "preview" };
 }
 
 function derivePoolBadge(poolId, volume30d) {
@@ -182,10 +182,6 @@ function derivePoolBadge(poolId, volume30d) {
 }
 
 function deriveBuybackBadge(buybackState, buybackCount) {
-  if (buybackState.status === "simulated") {
-    return { label: "demo vault log", tone: "new" };
-  }
-
   if (buybackState.status === "live" && buybackCount > 0) {
     return {
       label: `${buybackCount} indexed fill${buybackCount === 1 ? "" : "s"}`,
@@ -205,14 +201,10 @@ function deriveBuybackBadge(buybackState, buybackCount) {
     return { label: "vault scan unavailable", tone: "preview" };
   }
 
-  return { label: "buyback preview", tone: "planned" };
+  return { label: "buyback status unavailable", tone: "preview" };
 }
 
 function deriveStakingBadge(stakingState, totalLocked) {
-  if (stakingState.status === "simulated") {
-    return { label: "demo staking book", tone: "new" };
-  }
-
   if (stakingState.status === "live" && totalLocked > 0) {
     return { label: "live positions", tone: "live" };
   }
@@ -222,10 +214,10 @@ function deriveStakingBadge(stakingState, totalLocked) {
   }
 
   if (stakingState.status === "prelaunch") {
-    return { label: "launch preview", tone: "planned" };
+    return { label: "canister unpublished", tone: "planned" };
   }
 
-  return { label: "staking partial", tone: "preview" };
+  return { label: "staking state unavailable", tone: "preview" };
 }
 
 function deriveBurnBadge(burnState, totalBurned) {
@@ -255,7 +247,7 @@ function headerBadgeText(hydration) {
   if (hydration === "live") return "Live build state";
   if (hydration === "cached") return "Refreshing build state";
   if (hydration === "loading") return "Loading build state";
-  return "Fallback build state";
+  return "Live build state unavailable";
 }
 
 function deriveBuildState({
@@ -268,22 +260,21 @@ function deriveBuildState({
   burnState = null,
   hydration = "fallback",
 } = {}) {
-  const fallbackPoint = demoDashboard.timeline.at(-1) ?? {};
   const normalizedBuyback = buybackState ?? defaultBuybackState();
   const normalizedStaking = stakingState ?? defaultStakingState();
   const normalizedBurn = burnState ?? defaultBurnState();
-  const livePoint = dashboard?.timeline?.at(-1) ?? fallbackPoint;
+  const livePoint = getDashboardLastPoint(dashboard) ?? {};
   const buybackLog = Array.isArray(normalizedBuyback.log) ? normalizedBuyback.log : [];
   const stakingPositions = Array.isArray(normalizedStaking.positions)
     ? normalizedStaking.positions
     : [];
 
-  const mgsnPrice = prices?.mgsnUsd ?? livePoint.mgsnPrice ?? fallbackPoint.mgsnPrice ?? null;
-  const bobPrice = prices?.bobUsd ?? livePoint.bobPrice ?? fallbackPoint.bobPrice ?? null;
-  const icpPrice = icpSpot?.icpUsd ?? livePoint.icpPrice ?? fallbackPoint.icpPrice ?? null;
+  const mgsnPrice = prices?.mgsnUsd ?? livePoint.mgsnPrice ?? null;
+  const bobPrice = prices?.bobUsd ?? livePoint.bobPrice ?? null;
+  const icpPrice = icpSpot?.icpUsd ?? livePoint.icpPrice ?? null;
   const marketStats = dashboard?.marketStats ?? {};
   const poolLiquidity =
-    poolStats?.mgsnLiq ?? marketStats.totalLiquidityUsd ?? fallbackPoint.mgsnLiquidity ?? null;
+    poolStats?.mgsnLiq ?? marketStats.totalLiquidityUsd ?? livePoint.mgsnLiquidity ?? null;
   const volume24h = poolStats?.mgsnVol24h ?? null;
   const volume30d = poolStats?.mgsnVol30d ?? null;
   const circulatingSupply =
@@ -291,7 +282,7 @@ function deriveBuildState({
     normalizedBuyback.currentSupply ??
     normalizedStaking.currentSupply ??
     dashboard?.mgsnSupply ??
-    demoDashboard.mgsnSupply;
+    null;
   const totalBurned =
     typeof normalizedBurn.totalBurned === "number" ? normalizedBurn.totalBurned : null;
   const originalSupply =
@@ -313,7 +304,7 @@ function deriveBuildState({
       : null;
   const buybackTrackedUsd = sumTrackedBuybackUsd(buybackLog);
   const buybackEstimatedCount = buybackLog.filter(
-    (entry) => entry.usdBasis === "estimated_pool_snapshot" || entry.usdBasis === "simulated"
+    (entry) => entry.usdBasis === "estimated_pool_snapshot"
   ).length;
   const buybackUnavailableCount = buybackLog.filter(
     (entry) => entry.usdSpent == null || entry.usdBasis === "unavailable"
@@ -330,7 +321,7 @@ function deriveBuildState({
 
   return {
     hydration,
-    updatedAt: dashboard?.updatedAt ?? demoDashboard.updatedAt ?? BigInt(Date.now()) * 1_000_000n,
+    updatedAt: dashboard?.updatedAt ?? null,
     mgsnPrice,
     bobPrice,
     icpPrice,
@@ -368,17 +359,10 @@ function deriveBuildState({
 }
 
 function createFallbackBuildState(hydration = "fallback") {
-  const fallbackPoint = demoDashboard.timeline.at(-1) ?? {};
-
   return deriveBuildState({
-    dashboard: demoDashboard,
-    prices: {
-      mgsnUsd: fallbackPoint.mgsnPrice ?? null,
-      bobUsd: fallbackPoint.bobPrice ?? null,
-      mgsnCanister: TOKEN_CANISTERS.MGSN,
-      bobCanister: TOKEN_CANISTERS.BOB,
-    },
-    icpSpot: { icpUsd: fallbackPoint.icpPrice ?? null },
+    dashboard: createUnavailableDashboard(),
+    prices: null,
+    icpSpot: null,
     poolStats: {},
     buybackState: defaultBuybackState(),
     stakingState: defaultStakingState(),
@@ -395,7 +379,7 @@ function buildBuildSourceChips(state) {
   } else if (state.hydration === "loading") {
     chips.push(sourceChip("cache", "Loading market feed"));
   } else {
-    chips.push(sourceChip("fallback", "Snapshot market feed"));
+    chips.push(sourceChip("fallback", "Market feed unavailable"));
   }
 
   if (state.poolId) {
@@ -405,7 +389,7 @@ function buildBuildSourceChips(state) {
   if (state.buybackState.status === "live") {
     chips.push(sourceChip("live", "Buyback ledger"));
   } else if (state.buybackState.status === "unconfigured") {
-    chips.push(sourceChip("projected", "Buyback vault pending"));
+    chips.push(sourceChip("projected", "Buyback vault unpublished"));
   } else {
     chips.push(sourceChip("fallback", "Buyback scan unavailable"));
   }
@@ -415,7 +399,7 @@ function buildBuildSourceChips(state) {
   } else if (state.stakingState.status === "configured") {
     chips.push(sourceChip("projected", "Staking canister published"));
   } else {
-    chips.push(sourceChip("projected", "Staking preview"));
+    chips.push(sourceChip("fallback", "Staking state unavailable"));
   }
 
   if (state.burnState.status === "live") {
@@ -529,7 +513,7 @@ function buildPageHTML(state) {
       list: [
         state.hasLiveMarket
           ? "Dashboard is currently hydrated from live ICPSwap market and history data."
-          : "Dashboard falls back to the bundled snapshot when live market endpoints are unavailable.",
+          : "Dashboard keeps market metrics unavailable until the live ICPSwap feed returns.",
         `Buyback page: ${escapeHtml(state.buybackBadge.label)}.`,
         `Burn page: ${escapeHtml(state.burnBadge.label)}.`,
         `Staking page: ${escapeHtml(state.stakingBadge.label)}.`,
@@ -580,7 +564,7 @@ function buildPageHTML(state) {
           : "A public buyback vault still needs to be published.",
         state.stakingCanisterId
           ? `Published staking canister: <span class="build-mono">${escapeHtml(state.stakingCanisterId)}</span>.`
-          : "Staking remains in launch-preview mode until a public canister is available.",
+          : "No public staking canister has been published yet.",
       ],
       statusLabel: state.programBadge.label,
       statusTone: state.programBadge.tone,
@@ -647,7 +631,7 @@ function buildPageHTML(state) {
       list: [
         state.historyRange
           ? `History coverage: ${escapeHtml(state.historyRange)}.`
-          : "History falls back to the bundled snapshot when live token storage data is unavailable.",
+          : "History coverage is unavailable until live token-storage data returns.",
         state.poolLiquidity != null
           ? `Current MGSN/ICP liquidity: ${escapeHtml(formatCompactMoney(state.poolLiquidity))}.`
           : "Live pool liquidity unavailable.",
@@ -657,10 +641,10 @@ function buildPageHTML(state) {
     },
     {
       kicker: "Strategy",
-      title: "Capital policy and scenario tooling",
+      title: "Capital policy and live calculators",
       copy: "This remains the modeling surface for sizing, timing, and capital-allocation thought experiments.",
       list: [
-        "DCA, signal views, and scenario testing.",
+        "DCA, signal views, and capital-planning calculators.",
         "Useful for treasury policy before automation.",
       ],
       statusLabel: "live",
@@ -687,7 +671,7 @@ function buildPageHTML(state) {
     {
       kicker: "Staking",
       title: "Lock state and reward posture",
-      copy: "Staking is still either prelaunch or partially published, and the Build page now reflects that state instead of guessing.",
+      copy: "Staking may still be unpublished or only partially published, and the Build page now reflects that state instead of guessing.",
       list: [
         state.stakingCanisterId
           ? `Staking canister: <span class="build-mono">${escapeHtml(state.stakingCanisterId)}</span>.`
@@ -730,7 +714,7 @@ function buildPageHTML(state) {
       title: "Blueprint plus live truth surface",
       copy: "This page now hydrates from the same ICPSwap and ledger sources as the rest of the site, while still keeping sequencing and roadmap logic explicit.",
       list: [
-        "Truthfully reports live, cached, or fallback hydration state.",
+        "Truthfully reports live, cached, or unavailable hydration state.",
         "Supports manual refresh without losing the roadmap context.",
       ],
       statusLabel: state.hydration === "live" ? "live module" : "operational",
@@ -744,7 +728,7 @@ function buildPageHTML(state) {
     "DAO proposals focus on budgets, treasury policy, and reporting.",
     state.hasLiveMarket
       ? "The current market shell is already wired to live ICPSwap and ledger-backed state."
-      : "The current market shell still falls back safely when live endpoints are unavailable.",
+      : "The current market shell keeps market data unavailable instead of substituting a bundled snapshot.",
   ];
 
   const failsList = [
@@ -803,7 +787,7 @@ function buildPageHTML(state) {
                 list: [
                   state.historyRange
                     ? `History coverage: ${escapeHtml(state.historyRange)}.`
-                    : "History coverage falls back to the bundled dashboard snapshot.",
+                    : "History coverage is unavailable until live token-storage data returns.",
                   `MGSN canister: <span class="build-mono">${escapeHtml(state.mgsnCanister)}</span>.`,
                   state.totalPairs != null
                     ? `ICPSwap pairs tracked: ${escapeHtml(formatCompactNumber(state.totalPairs))}.`
@@ -976,7 +960,7 @@ function buildPageHTML(state) {
         </section>
 
         <footer class="page-footer">
-          <p>Revenue-first blueprint wired into the live MGSN product shell, with cached and fallback rendering when ICPSwap or ledger endpoints are unavailable.</p>
+          <p>Revenue-first blueprint wired into the live MGSN product shell, with cached first paint and explicit unavailable states when ICPSwap or ledger endpoints are offline.</p>
         </footer>
       </main>
     </div>`;

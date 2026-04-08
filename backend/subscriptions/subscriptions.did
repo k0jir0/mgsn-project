@@ -1,0 +1,123 @@
+type Account = record {
+  owner : principal;
+  subaccount : opt blob;
+};
+
+type Plan = record {
+  id : nat;
+  slug : text;
+  name : text;
+  description : text;
+  priceE8s : nat;
+  intervalDays : nat;
+  active : bool;
+  features : vec text;
+  createdAt : int;
+};
+
+type PlanInput = record {
+  slug : text;
+  name : text;
+  description : text;
+  priceE8s : nat;
+  intervalDays : nat;
+  active : bool;
+  features : vec text;
+};
+
+type InvoiceStatus = variant {
+  pending;
+  paid;
+  swept;
+  expired;
+  cancelled;
+};
+
+type Invoice = record {
+  id : nat;
+  planId : nat;
+  subscriber : principal;
+  quotedAmountE8s : nat;
+  revenueE8s : nat;
+  transferFeeE8s : nat;
+  subaccount : blob;
+  account : Account;
+  createdAt : int;
+  expiresAt : int;
+  paidAt : opt int;
+  sweptAt : opt int;
+  sweptTxIndex : opt nat;
+  balanceE8s : nat;
+  status : InvoiceStatus;
+  memo : text;
+};
+
+type SubscriptionStatus = variant {
+  active;
+  past_due;
+  cancelled;
+};
+
+type Subscription = record {
+  id : nat;
+  planId : nat;
+  subscriber : principal;
+  startedAt : int;
+  renewedAt : int;
+  expiresAt : int;
+  lastInvoiceId : nat;
+  totalPaidE8s : nat;
+  status : SubscriptionStatus;
+};
+
+type IntegrationConfig = record {
+  treasuryCanister : opt principal;
+  analyticsCanister : opt principal;
+  ledgerId : principal;
+  tokenSymbol : text;
+  tokenDecimals : nat8;
+  tokenFee : nat;
+  invoiceTtlDays : nat;
+};
+
+type Settlement = record {
+  invoice : Invoice;
+  subscription : Subscription;
+  treasuryTransferTxIndex : nat;
+  treasuryRecorded : bool;
+  analyticsRecorded : bool;
+};
+
+type PortalState = record {
+  owner : opt principal;
+  operators : vec principal;
+  config : IntegrationConfig;
+  plans : vec Plan;
+  invoices : vec Invoice;
+  subscriptions : vec Subscription;
+};
+
+type ResultOfPrincipal = variant { ok : principal; err : text };
+type ResultOfPrincipals = variant { ok : vec principal; err : text };
+type ResultOfConfig = variant { ok : IntegrationConfig; err : text };
+type ResultOfPlan = variant { ok : Plan; err : text };
+type ResultOfInvoice = variant { ok : Invoice; err : text };
+type ResultOfSettlement = variant { ok : Settlement; err : text };
+type ResultOfSubscription = variant { ok : Subscription; err : text };
+
+service : {
+  addOperator : (principal) -> (ResultOfPrincipals);
+  cancelMySubscription : (nat) -> (ResultOfSubscription);
+  claimOwner : () -> (ResultOfPrincipal);
+  configure : (IntegrationConfig) -> (ResultOfConfig);
+  createInvoice : (nat, text) -> (ResultOfInvoice);
+  createPlan : (PlanInput) -> (ResultOfPlan);
+  getConfig : query () -> (IntegrationConfig);
+  getPortalState : query (opt principal) -> (PortalState);
+  listPlans : query () -> (vec Plan);
+  refreshInvoice : (nat) -> (ResultOfInvoice);
+  removeOperator : (principal) -> (ResultOfPrincipals);
+  settleInvoice : (nat) -> (ResultOfSettlement);
+  transferOwnership : (principal) -> (ResultOfPrincipal);
+  updatePlan : (nat, PlanInput) -> (ResultOfPlan);
+};

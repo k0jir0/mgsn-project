@@ -21,7 +21,7 @@ Chart.register({
   },
 });
 
-import { demoDashboard, BUYBACK_PROGRAM, TOKEN_CANISTERS } from "./demoData";
+import { BUYBACK_PROGRAM, TOKEN_CANISTERS } from "./demoData";
 import { fetchLiveSpotPrices, fetchICPSwapPrices, fetchICPSwapPoolStats } from "./liveData";
 import { fetchBuybackProgramData } from "./onChainData.js";
 import { buildMobilePlatformNavHTML } from "./siteChrome.js";
@@ -31,7 +31,6 @@ import {
   attachScenarioStudio,
   buildBuybackSourceChips,
   buildScenarioHeaderHTML,
-  buildSimulatedBuybackState,
   loadScenarioState,
   readViewCache,
   writeViewCache,
@@ -43,19 +42,23 @@ const ICPSWAP_SWAP_URL =
   `https://app.icpswap.com/swap?input=${TOKEN_CANISTERS.ICP}&output=${TOKEN_CANISTERS.MGSN}`;
 const ICPSWAP_LP_URL =
   `https://app.icpswap.com/liquidity/add/${TOKEN_CANISTERS.ICP}/${TOKEN_CANISTERS.MGSN}`;
+const BUYBACK_CACHE_KEY = "buyback-page-live-v1";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
 function fmt(v, d = 2) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency", currency: "USD",
     minimumFractionDigits: d, maximumFractionDigits: d,
   }).format(v);
 }
 function compact(v) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(v);
 }
 function compactMoney(v) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency", currency: "USD",
     notation: "compact", maximumFractionDigits: 2,
@@ -69,7 +72,7 @@ function fmtBuybackUsd(entry, d = 2) {
     return "Unavailable";
   }
   const prefix =
-    entry?.usdBasis === "estimated_pool_snapshot" || entry?.usdBasis === "simulated"
+    entry?.usdBasis === "estimated_pool_snapshot"
       ? "~"
       : "";
   return `${prefix}${fmt(entry.usdSpent, d)}`;
@@ -109,8 +112,7 @@ function computeTotals(log) {
   const totalMgsn = log.reduce((a, b) => a + (b.mgsnAcquired ?? 0), 0);
   const exactUsdCount = log.filter((entry) => entry.usdBasis === "exact_execution").length;
   const estimatedUsdCount = log.filter(
-    (entry) =>
-      entry.usdBasis === "estimated_pool_snapshot" || entry.usdBasis === "simulated"
+    (entry) => entry.usdBasis === "estimated_pool_snapshot"
   ).length;
   const unavailableUsdCount = log.filter(
     (entry) => entry.usdSpent == null || entry.usdBasis === "unavailable"
@@ -221,15 +223,13 @@ function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, to
   const usdStatLabel = resolveUsdStatLabel(totals);
   const usdLogLabel = totals.estimatedUsdCount > 0 ? "USD value" : "USD spent";
   const heroBody = buybackState?.status === "unconfigured"
-    ? `${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. The public buyback vault is still prelaunch, so this page is showing the live schedule and calculator while it waits for a published execution wallet.`
-    : buybackState?.status === "simulated"
-      ? `${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. Scenario Studio is currently showcasing simulated executions so the full launch flow can be demonstrated.`
-      : totals.estimatedUsdCount > 0
-        ? `${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. Detected vault inflows are live on-chain; their USD values are estimated from daily ICPSwap MGSN/ICP pool snapshots until the paired ICP settlement path is published.`
+    ? `${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. The public buyback vault address has not been published yet, so this page can only show the live schedule and calculator until verifiable on-chain fills exist.`
+    : totals.estimatedUsdCount > 0
+      ? `${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. Detected vault inflows are live on-chain; their USD values are derived from daily ICPSwap MGSN/ICP pool snapshots until the paired ICP settlement path is published.`
+      : buybackState?.status === "unavailable"
+        ? `${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. Live vault indexing is temporarily unavailable, so only the current policy and calculator can be shown right now.`
         : `${BUYBACK_PROGRAM.pledgePct}% of all liquidity provider fee income earned from the MGSN/ICP pool on ICPSwap is committed to purchasing MGSN from the open market and permanently removing it from circulation. Every detected buyback is logged here and verifiable on the ICP blockchain.`;
-  const liveTag = buybackState?.status === "simulated"
-    ? `<span class="bb-live-tag bb-live-tag--demo">demo showcase</span>`
-    : hasRealVolume
+  const liveTag = hasRealVolume
       ? `<span class="bb-live-tag">real ICPSwap volume</span>`
       : `<span class="bb-live-tag bb-live-tag--est">estimated</span>`;
 
@@ -365,7 +365,7 @@ function buildHTML(log, totals, livePoolStats, mgsnNow, icpNow, buybackState, to
           <div class="bb-effect-card">
             <div class="bb-effect-icon">↓</div>
             <div class="bb-effect-title">Reduces circulating supply</div>
-            <p class="bb-effect-body">Every buyback permanently removes MGSN from the market. With a live circulating supply of ${compact(totalSupply)} tokens, supply reduction directly improves the price-to-value ratio for remaining holders.</p>
+            <p class="bb-effect-body">Every buyback permanently removes MGSN from the market. ${totalSupply != null ? `With a live circulating supply of ${compact(totalSupply)} tokens, supply reduction directly improves the price-to-value ratio for remaining holders.` : "Supply reduction is only quantified once the live ledger feed reports the current circulating supply."}</p>
           </div>
           <div class="bb-effect-card">
             <div class="bb-effect-icon">↑</div>
@@ -591,9 +591,9 @@ async function bootstrap() {
   document.head.appendChild(styleEl);
 
   const app = document.querySelector("#app");
-  const cachedState = readViewCache("buyback-page");
+  const cachedState = readViewCache(BUYBACK_CACHE_KEY);
   let baseState = buildBasePageState(cachedState ?? {});
-  renderBuybackPage(app, baseState, cachedState ? "cached" : "fallback");
+  renderBuybackPage(app, baseState, cachedState ? "cached" : "loading");
 
   const [liveSpotResult, liveIcpswapResult, livePoolResult, liveBuybackResult] = await Promise.allSettled([
     fetchLiveSpotPrices(),
@@ -608,8 +608,17 @@ async function bootstrap() {
     livePoolStats: livePoolResult.value ?? baseState.livePoolStats,
     buybackState: liveBuybackResult.value ?? baseState.buybackState,
   });
-  writeViewCache("buyback-page", baseState);
-  renderBuybackPage(app, baseState, "live");
+  writeViewCache(BUYBACK_CACHE_KEY, baseState);
+  const hasLivePayload = Boolean(
+    baseState.mgsnNow != null ||
+    baseState.icpNow != null ||
+    baseState.livePoolStats?.mgsnVol24h != null ||
+    baseState.livePoolStats?.mgsnVol30d != null ||
+    baseState.livePoolStats?.mgsnLiq != null ||
+    baseState.buybackState?.status === "live" ||
+    baseState.buybackState?.status === "unconfigured"
+  );
+  renderBuybackPage(app, baseState, hasLivePayload ? "live" : cachedState ? "cached" : "fallback");
 }
 
 bootstrap();
@@ -619,14 +628,14 @@ function fallbackBuybackState() {
     status: "unavailable",
     log: [],
     note: "The MGSN ledger could not be reached to verify buybacks.",
-    currentSupply: demoDashboard.mgsnSupply,
+    currentSupply: null,
   };
 }
 
 function buildBasePageState(raw = {}) {
   return {
-    mgsnNow: raw.mgsnNow ?? demoDashboard.timeline.at(-1).mgsnPrice,
-    icpNow: raw.icpNow ?? demoDashboard.timeline.at(-1).icpPrice,
+    mgsnNow: raw.mgsnNow ?? null,
+    icpNow: raw.icpNow ?? null,
     livePoolStats: raw.livePoolStats ?? {},
     buybackState: raw.buybackState ?? fallbackBuybackState(),
   };
@@ -639,14 +648,9 @@ function renderBuybackPage(app, baseState, hydrationMode) {
     scenario
   );
   const livePoolStats = applyScenarioToPoolStats(baseState.livePoolStats, scenario);
-  const simulatedState = buildSimulatedBuybackState(
-    baseState.buybackState?.currentSupply ?? demoDashboard.mgsnSupply,
-    prices.mgsnUsd,
-    scenario
-  );
-  const buybackState = simulatedState ?? baseState.buybackState ?? fallbackBuybackState();
+  const buybackState = baseState.buybackState ?? fallbackBuybackState();
   const buybackLog = buybackState.log ?? [];
-  const totalSupply = buybackState.currentSupply ?? demoDashboard.mgsnSupply;
+  const totalSupply = buybackState.currentSupply ?? null;
   const totals = computeTotals(buybackLog);
 
   app.innerHTML = buildHTML(
@@ -668,12 +672,14 @@ function renderBuybackPage(app, baseState, hydrationMode) {
     renderCalc(livePoolStats, prices.mgsnUsd);
   });
 
-  attachScenarioStudio(app, () => {
-    renderBuybackPage(app, baseState, loadScenarioState().demoMode ? "demo" : hydrationMode);
+  attachScenarioStudio(app, (action) => {
+    if (action?.type === "refresh" || action?.type === "clear-cache") {
+      window.location.reload();
+      return;
+    }
+    renderBuybackPage(app, baseState, hydrationMode);
   });
 
-  if (prices.mgsnUsd) {
-    const el = document.getElementById("bb-mgsn-price");
-    if (el) el.textContent = fmt(prices.mgsnUsd, 7);
-  }
+  const el = document.getElementById("bb-mgsn-price");
+  if (el) el.textContent = fmt(prices.mgsnUsd, 7);
 }

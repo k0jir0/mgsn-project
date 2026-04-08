@@ -1,0 +1,134 @@
+type Account = record {
+  owner : principal;
+  subaccount : opt blob;
+};
+
+type GovernanceConfig = record {
+  owner : opt principal;
+  snsRoot : opt principal;
+  snsGovernance : opt principal;
+  configuredAt : opt int;
+};
+
+type TokenConfig = record {
+  symbol : text;
+  ledgerId : principal;
+  decimals : nat8;
+  fee : nat;
+  enabled : bool;
+};
+
+type RevenuePolicy = record {
+  category : text;
+  targetBps : nat;
+  notes : text;
+};
+
+type RevenueEvent = record {
+  id : nat;
+  ledgerId : principal;
+  tokenSymbol : text;
+  amountE8s : nat;
+  source : text;
+  memo : text;
+  recordedBy : principal;
+  recordedAt : int;
+  txIndex : opt nat;
+  fromCanister : opt principal;
+};
+
+type RevenueRecordRequest = record {
+  ledgerId : principal;
+  tokenSymbol : text;
+  amountE8s : nat;
+  source : text;
+  memo : text;
+  txIndex : opt nat;
+  fromCanister : opt principal;
+};
+
+type BalanceSnapshot = record {
+  ledgerId : principal;
+  tokenSymbol : text;
+  balanceE8s : nat;
+  capturedAt : int;
+};
+
+type Disbursement = record {
+  id : nat;
+  ledgerId : principal;
+  tokenSymbol : text;
+  to : Account;
+  amountE8s : nat;
+  feeE8s : nat;
+  reason : text;
+  memoText : text;
+  executedAt : int;
+  executedBy : principal;
+  txIndex : nat;
+};
+
+type DisbursementRequest = record {
+  ledgerId : principal;
+  tokenSymbol : text;
+  to : Account;
+  amountE8s : nat;
+  feeE8s : opt nat;
+  reason : text;
+  memo : opt blob;
+  memoText : text;
+};
+
+type GovernanceUpdate = record {
+  owner : opt principal;
+  snsRoot : opt principal;
+  snsGovernance : opt principal;
+};
+
+type AdminState = record {
+  owner : opt principal;
+  operators : vec principal;
+  authorizedRevenueReporters : vec principal;
+  analyticsCanister : opt principal;
+  governance : GovernanceConfig;
+};
+
+type Overview = record {
+  admin : AdminState;
+  account : Account;
+  trackedTokens : vec TokenConfig;
+  revenuePolicies : vec RevenuePolicy;
+  recentRevenue : vec RevenueEvent;
+  recentDisbursements : vec Disbursement;
+  recentSnapshots : vec BalanceSnapshot;
+};
+
+type ResultOfPrincipal = variant { ok : principal; err : text };
+type ResultOfOptionalPrincipal = variant { ok : opt principal; err : text };
+type ResultOfPrincipals = variant { ok : vec principal; err : text };
+type ResultOfGovernance = variant { ok : GovernanceConfig; err : text };
+type ResultOfTokens = variant { ok : vec TokenConfig; err : text };
+type ResultOfPolicies = variant { ok : vec RevenuePolicy; err : text };
+type ResultOfRevenueEvent = variant { ok : RevenueEvent; err : text };
+type ResultOfBalanceSnapshot = variant { ok : BalanceSnapshot; err : text };
+type ResultOfDisbursement = variant { ok : Disbursement; err : text };
+
+service : {
+  addOperator : (principal) -> (ResultOfPrincipals);
+  authorizeRevenueReporter : (principal, bool) -> (ResultOfPrincipals);
+  claimOwner : () -> (ResultOfPrincipal);
+  configureGovernance : (GovernanceUpdate) -> (ResultOfGovernance);
+  disburse : (DisbursementRequest) -> (ResultOfDisbursement);
+  getAccount : query () -> (Account);
+  getOverview : query () -> (Overview);
+  listBalanceSnapshots : query (nat) -> (vec BalanceSnapshot);
+  listDisbursements : query (nat) -> (vec Disbursement);
+  listRevenueEvents : query (nat) -> (vec RevenueEvent);
+  recordRevenue : (RevenueRecordRequest) -> (ResultOfRevenueEvent);
+  removeOperator : (principal) -> (ResultOfPrincipals);
+  setAnalyticsCanister : (opt principal) -> (ResultOfOptionalPrincipal);
+  setRevenuePolicies : (vec RevenuePolicy) -> (ResultOfPolicies);
+  snapshotBalance : (principal) -> (ResultOfBalanceSnapshot);
+  transferOwnership : (principal) -> (ResultOfPrincipal);
+  upsertTrackedToken : (TokenConfig) -> (ResultOfTokens);
+};

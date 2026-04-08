@@ -1,0 +1,92 @@
+type AdminState = record {
+  owner : opt principal;
+  operators : vec principal;
+  authorizedReporters : vec principal;
+};
+
+type RevenueEvent = record {
+  id : nat;
+  category : text;
+  ledgerId : principal;
+  amountE8s : nat;
+  occurredAt : int;
+  sourceCanister : opt principal;
+  metadata : text;
+};
+
+type RevenueEventInput = record {
+  category : text;
+  ledgerId : principal;
+  amountE8s : nat;
+  occurredAt : int;
+  sourceCanister : opt principal;
+  metadata : text;
+};
+
+type SubscriptionEvent = record {
+  id : nat;
+  subscriber : principal;
+  planId : nat;
+  planSlug : text;
+  status : text;
+  amountE8s : nat;
+  intervalDays : nat;
+  occurredAt : int;
+  sourceCanister : opt principal;
+  metadata : text;
+};
+
+type SubscriptionEventInput = record {
+  subscriber : principal;
+  planId : nat;
+  planSlug : text;
+  status : text;
+  amountE8s : nat;
+  intervalDays : nat;
+  occurredAt : int;
+  sourceCanister : opt principal;
+  metadata : text;
+};
+
+type SubscriptionState = record {
+  subscriber : principal;
+  planId : nat;
+  planSlug : text;
+  status : text;
+  amountE8s : nat;
+  intervalDays : nat;
+  updatedAt : int;
+};
+
+type Dashboard = record {
+  admin : AdminState;
+  totalRevenueE8s : nat;
+  trailing30dRevenueE8s : nat;
+  monthlyRecurringRevenueE8s : nat;
+  annualRecurringRevenueE8s : nat;
+  activeSubscriptions : nat;
+  payingSubscribers : nat;
+  recentRevenue : vec RevenueEvent;
+  recentSubscriptionEvents : vec SubscriptionEvent;
+  activeStates : vec SubscriptionState;
+};
+
+type ResultOfPrincipal = variant { ok : principal; err : text };
+type ResultOfPrincipals = variant { ok : vec principal; err : text };
+type ResultOfRevenueEvent = variant { ok : RevenueEvent; err : text };
+type ResultOfSubscriptionEvent = variant { ok : SubscriptionEvent; err : text };
+
+service : {
+  addOperator : (principal) -> (ResultOfPrincipals);
+  authorizeReporter : (principal, bool) -> (ResultOfPrincipals);
+  claimOwner : () -> (ResultOfPrincipal);
+  getAdminState : query () -> (AdminState);
+  getDashboard : query () -> (Dashboard);
+  listRevenueEvents : query (nat) -> (vec RevenueEvent);
+  listSubscriptionEvents : query (nat) -> (vec SubscriptionEvent);
+  listSubscriptionStates : query () -> (vec SubscriptionState);
+  recordRevenueEvent : (RevenueEventInput) -> (ResultOfRevenueEvent);
+  recordSubscriptionEvent : (SubscriptionEventInput) -> (ResultOfSubscriptionEvent);
+  removeOperator : (principal) -> (ResultOfPrincipals);
+  transferOwnership : (principal) -> (ResultOfPrincipal);
+};

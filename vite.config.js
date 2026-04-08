@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 import { icpBindgen } from "@icp-sdk/bindgen/plugins/vite";
 
 const environment = process.env.ICP_ENVIRONMENT ?? "local";
-const canisterNames = ["backend"];
+const canisterNames = ["backend", "treasury", "subscriptions", "analytics"];
 
 function getCanisterId(name) {
   return execSync(`icp canister status ${name} -e ${environment} -i`, {
@@ -52,6 +52,8 @@ export default defineConfig(({ command }) => ({
         main:     "./index.html",
         strategy: "./strategy.html",
         build:    "./build.html",
+        subscribe:"./subscribe.html",
+        ops:      "./ops.html",
         buyback:  "./buyback.html",
         staking:  "./staking.html",
         burn:     "./burn.html",
