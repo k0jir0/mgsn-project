@@ -2,7 +2,7 @@
 
 Live site: https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/
 
-MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosystem. It combines live ICPSwap market data, MGSN ledger data, a scenario studio for demos, and tokenomics-focused calculators across dashboard, strategy, buyback, staking, and burn pages.
+MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosystem. It combines live ICPSwap market data, MGSN ledger data, a scenario studio for demos, tokenomics-focused calculators, and a revenue-first operating blueprint across dashboard, strategy, build, buyback, staking, and burn pages.
 
 ## What Is Live Today
 
@@ -11,6 +11,7 @@ MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosyste
 - Buyback is live as a calculator and schedule page, and stays in an honest prelaunch state until a public buyback vault is published.
 - Staking is live in launch-preview mode with real market assumptions, but needs a public staking canister to show live positions.
 - Burn reads live MGSN ledger and archive data to show supply, burn totals, leaderboard, and burn milestones.
+- Build page turns the lean SNS DAO, treasury, revenue app, and analytics spec into an integrated roadmap tied to current token IDs and public program wiring.
 - Scenario Studio persists across pages so one demo state can drive the full site consistently.
 - Mobile navigation and scrolling are tuned so the site behaves like a usable platform on phones and tablets.
 
@@ -20,6 +21,7 @@ MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosyste
 | --- | --- |
 | `/` | Dashboard: charts, live prices, reserve view, volume/liquidity, portfolio context |
 | `/strategy.html` | Strategy engine: 6-signal view, Kelly sizing, DCA, LP yield, portfolio tools |
+| `/build.html` | Build spec: SNS DAO, treasury logic, revenue app, analytics layer, and reality check |
 | `/buyback.html` | Buyback program: schedule, calculator, program status, execution log area |
 | `/staking.html` | Staking program: lock tiers, APY estimator, supply impact, launch-preview state |
 | `/burn.html` | Community burn: ledger-indexed burns, leaderboard, milestones, impact calculator |
@@ -85,6 +87,7 @@ ICPSwap swap URL:
 src/
   main.js         Dashboard
   strategy.js     Strategy page
+  build.js        Build-spec roadmap page
   buyback.js      Buyback page
   staking.js      Staking page
   burn.js         Burn page

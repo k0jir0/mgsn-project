@@ -1,6 +1,7 @@
 const PLATFORM_PAGES = Object.freeze([
   { key: "dashboard", label: "Dashboard", href: "/" },
   { key: "strategy", label: "Strategy", href: "/strategy.html" },
+  { key: "build", label: "Build", href: "/build.html" },
   { key: "buyback", label: "Buyback", href: "/buyback.html" },
   { key: "staking", label: "Staking", href: "/staking.html" },
   { key: "burn", label: "Burn", href: "/burn.html" },
