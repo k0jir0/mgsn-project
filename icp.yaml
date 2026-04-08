@@ -11,21 +11,21 @@ canisters:
       steps:
         - type: script
           commands:
-            - node scripts/build-canister.mjs treasury "$ICP_WASM_OUTPUT_PATH"
+            - cp backend/treasury/treasury.wasm "$ICP_WASM_OUTPUT_PATH"
 
   - name: subscriptions
     build:
       steps:
         - type: script
           commands:
-            - node scripts/build-canister.mjs subscriptions "$ICP_WASM_OUTPUT_PATH"
+            - cp backend/subscriptions/subscriptions.wasm "$ICP_WASM_OUTPUT_PATH"
 
   - name: analytics
     build:
       steps:
         - type: script
           commands:
-            - node scripts/build-canister.mjs analytics "$ICP_WASM_OUTPUT_PATH"
+            - cp backend/analytics/analytics.wasm "$ICP_WASM_OUTPUT_PATH"
 
   - name: frontend
     recipe:
