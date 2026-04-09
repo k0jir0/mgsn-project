@@ -684,26 +684,33 @@ async function bootstrap() {
 
   const app = document.querySelector("#app");
   const cachedState = readViewCache(BURN_CACHE_KEY);
+  const hadCachedState = Boolean(cachedState);
   let baseState = buildBurnBaseState(cachedState ?? {});
-  renderBurnPage(app, baseState, cachedState ? "cached" : "loading");
+  renderBurnPage(app, baseState, hadCachedState ? "cached" : "loading");
 
   const [liveIcpswapResult, liveBurnResult] = await Promise.allSettled([
     fetchICPSwapPrices(),
     fetchBurnProgramData(),
   ]);
 
-  baseState = buildBurnBaseState({
-    mgsnNow: liveIcpswapResult.value?.mgsnUsd ?? baseState.mgsnNow,
-    burnState: liveBurnResult.value ?? baseState.burnState,
-  });
-  writeViewCache(BURN_CACHE_KEY, baseState);
+  const nextSwapPrices = liveIcpswapResult.status === "fulfilled" ? liveIcpswapResult.value : null;
+  const nextBurnState = liveBurnResult.status === "fulfilled" ? liveBurnResult.value : null;
   const hasLivePayload = Boolean(
-    baseState.mgsnNow != null ||
-    baseState.burnState?.status === "live" ||
-    baseState.burnState?.totalBurned != null ||
-    baseState.burnState?.currentSupply != null
+    nextSwapPrices?.mgsnUsd != null ||
+    nextBurnState?.status === "live" ||
+    nextBurnState?.totalBurned != null ||
+    nextBurnState?.currentSupply != null
   );
-  renderBurnPage(app, baseState, hasLivePayload ? "live" : cachedState ? "cached" : "fallback");
+
+  if (hasLivePayload) {
+    baseState = buildBurnBaseState({
+      mgsnNow: nextSwapPrices?.mgsnUsd ?? baseState.mgsnNow,
+      burnState: nextBurnState ?? baseState.burnState,
+    });
+    writeViewCache(BURN_CACHE_KEY, baseState);
+  }
+
+  renderBurnPage(app, baseState, hasLivePayload ? "live" : hadCachedState ? "cached" : "fallback");
 }
 
 bootstrap();

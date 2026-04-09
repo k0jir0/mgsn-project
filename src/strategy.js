@@ -1384,8 +1384,9 @@ async function bootstrap() {
 
   const app = document.querySelector("#app");
   const cachedState = readViewCache(STRATEGY_CACHE_KEY);
+  const hadCachedState = Boolean(cachedState);
   let baseState = buildStrategyBaseState(cachedState ?? {});
-  renderStrategyPage(app, baseState, cachedState ? "cached" : "fallback");
+  renderStrategyPage(app, baseState, hadCachedState ? "cached" : "loading");
 
   const [liveDashboardResult, liveSpotResult, liveIcpswapResult, livePoolResult] = await Promise.allSettled([
     fetchDashboardData(),
@@ -1394,15 +1395,33 @@ async function bootstrap() {
     fetchICPSwapPoolStats(),
   ]);
 
-  baseState = buildStrategyBaseState({
-    dashboard: liveDashboardResult.value ?? baseState.dashboard,
-    liveIcpUsd: liveSpotResult.value?.icpUsd ?? baseState.liveIcpUsd,
-    liveMgsnUsd: liveIcpswapResult.value?.mgsnUsd ?? baseState.liveMgsnUsd,
-    liveBobUsd: liveIcpswapResult.value?.bobUsd ?? baseState.liveBobUsd,
-    livePoolStats: livePoolResult.value ?? baseState.livePoolStats,
-  });
-  writeViewCache(STRATEGY_CACHE_KEY, baseState);
-  renderStrategyPage(app, baseState, "live");
+  const nextDashboard = liveDashboardResult.status === "fulfilled" ? liveDashboardResult.value : null;
+  const nextSpotPrices = liveSpotResult.status === "fulfilled" ? liveSpotResult.value : null;
+  const nextSwapPrices = liveIcpswapResult.status === "fulfilled" ? liveIcpswapResult.value : null;
+  const nextPoolStats = livePoolResult.status === "fulfilled" ? livePoolResult.value : null;
+  const hasLivePayload = Boolean(
+    hasDashboardHistory(nextDashboard) ||
+    nextSpotPrices?.icpUsd != null ||
+    nextSwapPrices?.mgsnUsd != null ||
+    nextSwapPrices?.bobUsd != null ||
+    nextPoolStats?.mgsnVol24h != null ||
+    nextPoolStats?.mgsnVol30d != null ||
+    nextPoolStats?.mgsnLiq != null
+  );
+
+  if (hasLivePayload) {
+    baseState = buildStrategyBaseState({
+      dashboard: nextDashboard ?? baseState.dashboard,
+      liveIcpUsd: nextSpotPrices?.icpUsd ?? baseState.liveIcpUsd,
+      liveMgsnUsd: nextSwapPrices?.mgsnUsd ?? baseState.liveMgsnUsd,
+      liveBobUsd: nextSwapPrices?.bobUsd ?? baseState.liveBobUsd,
+      livePoolStats: nextPoolStats ?? baseState.livePoolStats,
+    });
+    writeViewCache(STRATEGY_CACHE_KEY, baseState);
+    renderStrategyPage(app, baseState, "live");
+  } else {
+    renderStrategyPage(app, baseState, hadCachedState ? "cached" : "fallback");
+  }
 
   setInterval(async () => {
     const [nextDashboardResult, nextSpotResult, nextIcpswapResult, nextPoolResult] = await Promise.allSettled([
@@ -1411,12 +1430,31 @@ async function bootstrap() {
       fetchICPSwapPrices(true),
       fetchICPSwapPoolStats(true),
     ]);
+
+    const refreshedDashboard = nextDashboardResult.status === "fulfilled" ? nextDashboardResult.value : null;
+    const refreshedSpotPrices = nextSpotResult.status === "fulfilled" ? nextSpotResult.value : null;
+    const refreshedSwapPrices = nextIcpswapResult.status === "fulfilled" ? nextIcpswapResult.value : null;
+    const refreshedPoolStats = nextPoolResult.status === "fulfilled" ? nextPoolResult.value : null;
+    const hasFreshLivePayload = Boolean(
+      hasDashboardHistory(refreshedDashboard) ||
+      refreshedSpotPrices?.icpUsd != null ||
+      refreshedSwapPrices?.mgsnUsd != null ||
+      refreshedSwapPrices?.bobUsd != null ||
+      refreshedPoolStats?.mgsnVol24h != null ||
+      refreshedPoolStats?.mgsnVol30d != null ||
+      refreshedPoolStats?.mgsnLiq != null
+    );
+
+    if (!hasFreshLivePayload) {
+      return;
+    }
+
     baseState = buildStrategyBaseState({
-      dashboard: nextDashboardResult.value ?? baseState.dashboard,
-      liveIcpUsd: nextSpotResult.value?.icpUsd ?? baseState.liveIcpUsd,
-      liveMgsnUsd: nextIcpswapResult.value?.mgsnUsd ?? baseState.liveMgsnUsd,
-      liveBobUsd: nextIcpswapResult.value?.bobUsd ?? baseState.liveBobUsd,
-      livePoolStats: nextPoolResult.value ?? baseState.livePoolStats,
+      dashboard: refreshedDashboard ?? baseState.dashboard,
+      liveIcpUsd: refreshedSpotPrices?.icpUsd ?? baseState.liveIcpUsd,
+      liveMgsnUsd: refreshedSwapPrices?.mgsnUsd ?? baseState.liveMgsnUsd,
+      liveBobUsd: refreshedSwapPrices?.bobUsd ?? baseState.liveBobUsd,
+      livePoolStats: refreshedPoolStats ?? baseState.livePoolStats,
     });
     writeViewCache(STRATEGY_CACHE_KEY, baseState);
     renderStrategyPage(app, baseState, "live");

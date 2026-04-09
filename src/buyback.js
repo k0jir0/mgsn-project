@@ -577,8 +577,9 @@ async function bootstrap() {
 
   const app = document.querySelector("#app");
   const cachedState = readViewCache(BUYBACK_CACHE_KEY);
+  const hadCachedState = Boolean(cachedState);
   let baseState = buildBasePageState(cachedState ?? {});
-  renderBuybackPage(app, baseState, cachedState ? "cached" : "loading");
+  renderBuybackPage(app, baseState, hadCachedState ? "cached" : "loading");
 
   const [liveSpotResult, liveIcpswapResult, livePoolResult, liveBuybackResult] = await Promise.allSettled([
     fetchLiveSpotPrices(),
@@ -587,23 +588,31 @@ async function bootstrap() {
     fetchBuybackProgramData(),
   ]);
 
-  baseState = buildBasePageState({
-    mgsnNow: liveIcpswapResult.value?.mgsnUsd ?? baseState.mgsnNow,
-    icpNow: liveSpotResult.value?.icpUsd ?? baseState.icpNow,
-    livePoolStats: livePoolResult.value ?? baseState.livePoolStats,
-    buybackState: liveBuybackResult.value ?? baseState.buybackState,
-  });
-  writeViewCache(BUYBACK_CACHE_KEY, baseState);
+  const nextSpotPrices = liveSpotResult.status === "fulfilled" ? liveSpotResult.value : null;
+  const nextSwapPrices = liveIcpswapResult.status === "fulfilled" ? liveIcpswapResult.value : null;
+  const nextPoolStats = livePoolResult.status === "fulfilled" ? livePoolResult.value : null;
+  const nextBuybackState = liveBuybackResult.status === "fulfilled" ? liveBuybackResult.value : null;
   const hasLivePayload = Boolean(
-    baseState.mgsnNow != null ||
-    baseState.icpNow != null ||
-    baseState.livePoolStats?.mgsnVol24h != null ||
-    baseState.livePoolStats?.mgsnVol30d != null ||
-    baseState.livePoolStats?.mgsnLiq != null ||
-    baseState.buybackState?.status === "live" ||
-    baseState.buybackState?.status === "unconfigured"
+    nextSwapPrices?.mgsnUsd != null ||
+    nextSpotPrices?.icpUsd != null ||
+    nextPoolStats?.mgsnVol24h != null ||
+    nextPoolStats?.mgsnVol30d != null ||
+    nextPoolStats?.mgsnLiq != null ||
+    nextBuybackState?.status === "live" ||
+    nextBuybackState?.status === "unconfigured"
   );
-  renderBuybackPage(app, baseState, hasLivePayload ? "live" : cachedState ? "cached" : "fallback");
+
+  if (hasLivePayload) {
+    baseState = buildBasePageState({
+      mgsnNow: nextSwapPrices?.mgsnUsd ?? baseState.mgsnNow,
+      icpNow: nextSpotPrices?.icpUsd ?? baseState.icpNow,
+      livePoolStats: nextPoolStats ?? baseState.livePoolStats,
+      buybackState: nextBuybackState ?? baseState.buybackState,
+    });
+    writeViewCache(BUYBACK_CACHE_KEY, baseState);
+  }
+
+  renderBuybackPage(app, baseState, hasLivePayload ? "live" : hadCachedState ? "cached" : "fallback");
 }
 
 bootstrap();

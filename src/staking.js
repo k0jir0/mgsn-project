@@ -740,8 +740,9 @@ async function bootstrap() {
 
   const app = document.querySelector("#app");
   const cachedState = readViewCache(STAKING_CACHE_KEY);
+  const hadCachedState = Boolean(cachedState);
   let baseState = buildStakingBaseState(cachedState ?? {});
-  renderStakingPage(app, baseState, cachedState ? "cached" : "loading");
+  renderStakingPage(app, baseState, hadCachedState ? "cached" : "loading");
 
   const [liveSpotResult, liveIcpswapResult, livePoolResult, liveStakingResult] = await Promise.allSettled([
     fetchLiveSpotPrices(),
@@ -750,24 +751,32 @@ async function bootstrap() {
     fetchStakingProgramData(),
   ]);
 
-  baseState = buildStakingBaseState({
-    mgsnNow: liveIcpswapResult.value?.mgsnUsd ?? baseState.mgsnNow,
-    icpNow: liveSpotResult.value?.icpUsd ?? baseState.icpNow,
-    livePoolStats: livePoolResult.value ?? baseState.livePoolStats,
-    stakingState: liveStakingResult.value ?? baseState.stakingState,
-  });
-  writeViewCache(STAKING_CACHE_KEY, baseState);
+  const nextSpotPrices = liveSpotResult.status === "fulfilled" ? liveSpotResult.value : null;
+  const nextSwapPrices = liveIcpswapResult.status === "fulfilled" ? liveIcpswapResult.value : null;
+  const nextPoolStats = livePoolResult.status === "fulfilled" ? livePoolResult.value : null;
+  const nextStakingState = liveStakingResult.status === "fulfilled" ? liveStakingResult.value : null;
   const hasLivePayload = Boolean(
-    baseState.mgsnNow != null ||
-    baseState.icpNow != null ||
-    baseState.livePoolStats?.mgsnVol24h != null ||
-    baseState.livePoolStats?.mgsnVol30d != null ||
-    baseState.livePoolStats?.mgsnLiq != null ||
-    baseState.stakingState?.status === "live" ||
-    baseState.stakingState?.status === "configured" ||
-    baseState.stakingState?.status === "prelaunch"
+    nextSwapPrices?.mgsnUsd != null ||
+    nextSpotPrices?.icpUsd != null ||
+    nextPoolStats?.mgsnVol24h != null ||
+    nextPoolStats?.mgsnVol30d != null ||
+    nextPoolStats?.mgsnLiq != null ||
+    nextStakingState?.status === "live" ||
+    nextStakingState?.status === "configured" ||
+    nextStakingState?.status === "prelaunch"
   );
-  renderStakingPage(app, baseState, hasLivePayload ? "live" : cachedState ? "cached" : "fallback");
+
+  if (hasLivePayload) {
+    baseState = buildStakingBaseState({
+      mgsnNow: nextSwapPrices?.mgsnUsd ?? baseState.mgsnNow,
+      icpNow: nextSpotPrices?.icpUsd ?? baseState.icpNow,
+      livePoolStats: nextPoolStats ?? baseState.livePoolStats,
+      stakingState: nextStakingState ?? baseState.stakingState,
+    });
+    writeViewCache(STAKING_CACHE_KEY, baseState);
+  }
+
+  renderStakingPage(app, baseState, hasLivePayload ? "live" : hadCachedState ? "cached" : "fallback");
 }
 
 bootstrap();
