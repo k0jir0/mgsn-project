@@ -373,15 +373,22 @@ export function getBurnScenarioAmount(scenario = loadScenarioState()) {
   return Math.max(0, scenario.simulatedBurnAmount);
 }
 
-export function buildDashboardSourceChips(dashboard, scenario, hydration) {
+export function buildDashboardSourceChips(dashboard, scenario, hydration, options = {}) {
   void scenario;
+  const { hasPartialLiveData = false } = options;
   const chips = [];
   if (dashboard.marketStats?.historyStartLabel) {
     chips.push(sourceChip("live", "ICPSwap history"));
   } else if (hydration === "loading") {
     chips.push(sourceChip("cache", "Loading history"));
   } else if (hydration === "cached") {
+    if (hasPartialLiveData) {
+      chips.push(sourceChip("live", "Spot + pool loaded"));
+    }
     chips.push(sourceChip("cache", "Refreshing history"));
+  } else if (hasPartialLiveData) {
+    chips.push(sourceChip("live", "Spot + pool loaded"));
+    chips.push(sourceChip("fallback", "History unavailable"));
   } else {
     chips.push(sourceChip("fallback", "History unavailable"));
   }

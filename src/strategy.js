@@ -1023,8 +1023,18 @@ function buildHTML(dashboard, sig, bt, lp, arb, alerts, portfolio, scenarioHeade
     </div>`;
 }
 
-function buildUnavailableHTML(prices, livePoolStats, scenarioHeaderHtml) {
+function buildUnavailableHTML(prices, livePoolStats, scenarioHeaderHtml, { hasPartialLiveData = false } = {}) {
   const volume30d = livePoolStats?.mgsnVol30d ?? (livePoolStats?.mgsnVol24h ? livePoolStats.mgsnVol24h * 30 : null);
+  const sectionLabel = hasPartialLiveData ? "Strategy history incomplete" : "Strategy feed unavailable";
+  const title = hasPartialLiveData
+    ? "Live spot and pool data loaded, but history is incomplete"
+    : "Live market history is unavailable";
+  const subtitle = hasPartialLiveData
+    ? "The strategy page has current ICPSwap spot and pool context, but the composite engine still requires overlapping MGSN and BOB history before it can calculate signals, backtests, or arbitrage scores."
+    : "The strategy engine only scores live ICPSwap market history. It does not synthesize composite signals, backtests, or arbitrage scores from bundled snapshots. Refresh this page once overlapping MGSN and BOB history is available again.";
+  const footerCopy = hasPartialLiveData
+    ? "Live spot and pool context will keep refreshing. The full strategy engine resumes automatically when overlapping ICPSwap history is available again."
+    : "The strategy engine resumes automatically when live ICPSwap history is available again.";
   return `
     ${buildPlatformHeaderHTML({
       activePage: "strategy",
@@ -1040,9 +1050,9 @@ function buildUnavailableHTML(prices, livePoolStats, scenarioHeaderHtml) {
 
       <section class="s-section" style="padding-top:20px">
         <div class="s-calc-card">
-          <span class="s-calc-section-label">Strategy feed unavailable</span>
-          <h2 class="main-title" style="margin:0 0 10px">Live market history is unavailable</h2>
-          <p class="main-subtitle" style="max-width:780px">The strategy engine only scores live ICPSwap market history. It does not synthesize composite signals, backtests, or arbitrage scores from bundled snapshots. Refresh this page once overlapping MGSN and BOB history is available again.</p>
+          <span class="s-calc-section-label">${sectionLabel}</span>
+          <h2 class="main-title" style="margin:0 0 10px">${title}</h2>
+          <p class="main-subtitle" style="max-width:780px">${subtitle}</p>
           <div class="s-port-grid" style="margin-top:16px">
             <div class="s-port-stat"><span class="s-port-label">MGSN spot</span><span class="s-port-val mgsn">${prices.mgsnUsd ? fmt(prices.mgsnUsd, 7) : "—"}</span></div>
             <div class="s-port-stat"><span class="s-port-label">BOB spot</span><span class="s-port-val">${prices.bobUsd ? fmt(prices.bobUsd, 4) : "—"}</span></div>
@@ -1059,7 +1069,7 @@ function buildUnavailableHTML(prices, livePoolStats, scenarioHeaderHtml) {
       </section>
 
       <div class="page-footer" style="padding:24px 0 60px">
-        <p>The strategy engine resumes automatically when live ICPSwap history is available again.</p>
+        <p>${footerCopy}</p>
         <p style="margin-top:4px">Powered by <a href="https://icpswap.com" target="_blank" rel="noopener noreferrer">ICPSwap</a> | No bundled market snapshot is shown here.</p>
       </div>
     </div>`;
@@ -1493,6 +1503,17 @@ function buildStrategyBaseState(raw = {}) {
   };
 }
 
+function hasStrategyPartialLiveData(prices, livePoolStats = {}) {
+  return Boolean(
+    prices.icpUsd != null ||
+    prices.mgsnUsd != null ||
+    prices.bobUsd != null ||
+    livePoolStats?.mgsnVol24h != null ||
+    livePoolStats?.mgsnVol30d != null ||
+    livePoolStats?.mgsnLiq != null
+  );
+}
+
 function renderStrategyPage(app, baseState, hydrationMode) {
   const scenario = loadScenarioState();
   const dashboard = applyScenarioToDashboard(baseState.dashboard ?? createUnavailableDashboard(), scenario);
@@ -1511,15 +1532,18 @@ function renderStrategyPage(app, baseState, hydrationMode) {
   liveMgsnUsd = prices.mgsnUsd;
   liveBobUsd = prices.bobUsd;
   livePoolStats = livePoolStatsLocal;
+  const hasPartialLiveData = hasStrategyPartialLiveData(prices, livePoolStatsLocal);
+  const statusHtml = buildScenarioHeaderHTML(
+    "strategy",
+    buildDashboardSourceChips(dashboard, scenario, hydrationMode, { hasPartialLiveData })
+  );
 
   if (!hasDashboardHistory(dashboard)) {
     app.innerHTML = buildUnavailableHTML(
       prices,
       livePoolStatsLocal,
-      buildScenarioHeaderHTML(
-        "strategy",
-        buildDashboardSourceChips(dashboard, scenario, hydrationMode)
-      )
+      statusHtml,
+      { hasPartialLiveData }
     );
 
     attachScenarioStudio(app, (action) => {
@@ -1549,10 +1573,7 @@ function renderStrategyPage(app, baseState, hydrationMode) {
     arb,
     alerts,
     defPort,
-    buildScenarioHeaderHTML(
-      "strategy",
-      buildDashboardSourceChips(dashboard, scenario, hydrationMode)
-    )
+    statusHtml
   );
 
   const holdingsEl = document.getElementById("port-holdings");
