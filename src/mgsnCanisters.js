@@ -3,6 +3,13 @@ import { IDL } from "@dfinity/candid";
 import { safeGetCanisterEnv } from "@icp-sdk/core/agent/canister-env";
 
 const canisterEnv = safeGetCanisterEnv();
+const IC_API_HOST = "https://icp-api.io";
+
+function getCanisterHost() {
+  return window.location.hostname.includes("localhost")
+    ? window.location.origin
+    : IC_API_HOST;
+}
 
 function resultVariant(okType) {
   return IDL.Variant({ ok: okType, err: IDL.Text });
@@ -337,7 +344,7 @@ async function createManagedActor(name, idlFactory, identity) {
   }
 
   const agent = new HttpAgent({
-    host: window.location.origin,
+    host: getCanisterHost(),
     identity,
   });
 
