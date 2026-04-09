@@ -42,6 +42,14 @@ function clearNotice() {
   state.notice = null;
 }
 
+async function safeOptionalCall(factory) {
+  try {
+    return await factory();
+  } catch {
+    return null;
+  }
+}
+
 async function loadOpsState() {
   const [treasuryActor, analyticsActor, subscriptionsActor] = await Promise.all([
     createTreasuryActor(state.auth?.identity),
@@ -51,7 +59,7 @@ async function loadOpsState() {
 
   const [treasuryOverview, analyticsDashboard, subscriptionsConfig, subscriptionsPortal] = await Promise.all([
     treasuryActor ? treasuryActor.getOverview() : null,
-    analyticsActor ? analyticsActor.getDashboard() : null,
+    analyticsActor ? safeOptionalCall(() => analyticsActor.getDashboard()) : null,
     subscriptionsActor ? subscriptionsActor.getConfig() : null,
     subscriptionsActor ? subscriptionsActor.getPortalState([]) : null,
   ]);
