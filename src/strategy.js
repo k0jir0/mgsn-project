@@ -123,6 +123,10 @@ function pct(from, to) {
   return ((to - from) / from) * 100;
 }
 
+function safeMultiply(left, right) {
+  return Number.isFinite(left) && Number.isFinite(right) ? left * right : null;
+}
+
 // ── MACD ─────────────────────────────────────────────────────────────────────
 /** Exponential Moving Average */
 function ema(arr, period) {
@@ -264,20 +268,27 @@ function computeSignals(dashboard, liveIcp, liveMgsn, liveBob) {
   else                     { smaScore = 15; smaLabel = "STRONG BULL";smaCross = `Fast ↑ ${crossover.toFixed(1)}% above slow SMA`; }
 
   // ── Signal 3: mNAV Ratio ──────────────────────────────────────────────────
-  const mgsnCap  = mgsnNow  * dashboard.mgsnSupply;
-  const bobCap   = bobNow   * dashboard.bobSupply;
-  const mNav     = bobCap > 0 ? mgsnCap / bobCap : 0;
+  const mgsnCap  = safeMultiply(mgsnNow, dashboard.mgsnSupply);
+  const bobCap   = safeMultiply(bobNow, dashboard.bobSupply);
+  const mNav     = typeof bobCap === "number" && bobCap > 0 && typeof mgsnCap === "number"
+    ? mgsnCap / bobCap
+    : null;
 
   const navHistory = tl.map((p) => {
-    const mc = p.mgsnPrice * dashboard.mgsnSupply;
-    const bc = p.bobPrice  * dashboard.bobSupply;
-    return bc > 0 ? mc / bc : 0;
-  }).filter((v) => v > 0);
-  const avgNav  = navHistory.reduce((a, b) => a + b, 0) / navHistory.length;
-  const navDev  = ((mNav - avgNav) / avgNav) * 100;
+    const mc = safeMultiply(p.mgsnPrice, dashboard.mgsnSupply);
+    const bc = safeMultiply(p.bobPrice, dashboard.bobSupply);
+    return typeof bc === "number" && bc > 0 && typeof mc === "number" ? mc / bc : null;
+  }).filter((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
+  const avgNav  = navHistory.length
+    ? navHistory.reduce((a, b) => a + b, 0) / navHistory.length
+    : null;
+  const navDev  = typeof mNav === "number" && typeof avgNav === "number" && avgNav > 0
+    ? ((mNav - avgNav) / avgNav) * 100
+    : null;
 
   let navScore, navLabel, navNote;
-  if (navDev < -50)      { navScore = 90; navLabel = "DEEP DISCOUNT"; navNote = `${navDev.toFixed(1)}% below historical avg`; }
+  if (navDev == null)    { navScore = 50; navLabel = "UNAVAILABLE";    navNote = "Live token supply unavailable for mNAV valuation"; }
+  else if (navDev < -50) { navScore = 90; navLabel = "DEEP DISCOUNT"; navNote = `${navDev.toFixed(1)}% below historical avg`; }
   else if (navDev < -20) { navScore = 70; navLabel = "DISCOUNT";      navNote = `${navDev.toFixed(1)}% below historical avg`; }
   else if (navDev < 10)  { navScore = 50; navLabel = "FAIR VALUE";    navNote = `Near historical avg (${avgNav.toFixed(4)}×)`; }
   else if (navDev < 40)  { navScore = 30; navLabel = "PREMIUM";       navNote = `+${navDev.toFixed(1)}% above avg`; }
@@ -532,20 +543,22 @@ function computeArbitrageScore(mgsnLive, mgsnProjected, mgsnHistorical) {
 
   return {
     available: true,
-    mgsnLive, mgsnProjected, mgsnHistorical,
-    spreadVsProj, spreadVsHist, abs,
-    opportunity, color, action,
+    mgsnLive,
+    mgsnProjected,
+    mgsnHistorical,
+    spreadVsProj,
+    spreadVsHist,
+    abs,
+    opportunity,
+    color,
+    action,
   };
 }
-
-// ── Alert Builder ─────────────────────────────────────────────────────────────
 
 function buildAlerts(sig, bt, portfolio) {
   const alerts = [];
 
-  if (sig.composite >= 75)
-    alerts.push({ level: "high", icon: "🔥", text: `STRONG BUY — all 6 signals aligned. Use ${(sig.kelly.fraction * 100).toFixed(1)}% Kelly position sizing.` });
-  else if (sig.composite >= 62)
+  if (sig.action === "BUY" || sig.action === "STRONG BUY")
     alerts.push({ level: "high", icon: "⬆", text: `BUY signal active. Next DCA window: add ${(sig.kelly.fraction * 100).toFixed(1)}% of liquid capital to MGSN.` });
 
   if (sig.rsi.value < 35)
@@ -557,7 +570,7 @@ function buildAlerts(sig, bt, portfolio) {
   if (sig.bb.pctB < 0.15)
     alerts.push({ level: "high", icon: "⬡", text: `Bollinger %B at ${(sig.bb.pctB * 100).toFixed(1)}% — BOB near lower band. Historically high-probability reversal.` });
 
-  if (sig.nav.ratio < sig.nav.avg * 0.6)
+  if (typeof sig.nav.ratio === "number" && typeof sig.nav.avg === "number" && sig.nav.ratio < sig.nav.avg * 0.6)
     alerts.push({ level: "med", icon: "◈", text: `mNAV at ${sig.nav.ratio.toFixed(4)}× — ${((1 - sig.nav.ratio / sig.nav.avg) * 100).toFixed(0)}% below historical avg. Deep discount.` });
 
   if (portfolio?.unrealisedPct !== undefined && portfolio.unrealisedPct < -30)

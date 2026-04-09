@@ -281,10 +281,10 @@ function renderChartMessage(canvas, width, height, message) {
 
 // Panel 1 — Token Purchases (SaylorTracker: Bitcoin Reserve with Cash Reserve tab)
 // We show cumulative MGSN market cap (filled) and BOB market cap (line)
-function renderReserveChart(series) {
+function renderReserveChart(series, dashboard) {
   const labels = series.map((p) => p.period.split(" ")[0]);
-  const mgsnCap = series.map((p) => p.mgsnPrice * 77_000_000);
-  const bobCap  = series.map((p) => p.bobPrice  * 210_000_000);
+  const mgsnCap = series.map((p) => safeMultiply(p.mgsnPrice, dashboard.mgsnSupply));
+  const bobCap  = series.map((p) => safeMultiply(p.bobPrice, dashboard.bobSupply));
   const opts = baseOpts((v) => compactMoney(v));
   opts.plugins.tooltip.callbacks.label = (ctx) =>
     ` ${ctx.dataset.label}: ${compactMoney(ctx.raw)}`;
@@ -353,12 +353,12 @@ function renderPerformanceChart(series) {
 
 // Panel 4 — MGSN Yield, Gain & Holdings (SaylorTracker: BTC Yield, Gain & Holdings)
 // Bars = monthly % gain, Line = cumulative gain, secondary line = holdings value
-function renderYieldChart(series) {
+function renderYieldChart(series, dashboard) {
   const labels   = series.map((p) => p.period.split(" ")[0]);
   const monthGain = series.map((p, i) =>
     i === 0 ? 0 : pct(series[i - 1].mgsnPrice, p.mgsnPrice));
   const cumulative = series.map((p) => pct(series[0].mgsnPrice, p.mgsnPrice));
-  const holdings   = series.map((p) => p.mgsnPrice * 77_000_000);
+  const holdings   = series.map((p) => safeMultiply(p.mgsnPrice, dashboard.mgsnSupply));
 
   const opts = {
     ...baseOpts(),
@@ -615,10 +615,10 @@ function renderAllCharts(dashboard) {
         return;
       }
       switch (id) {
-        case "reserve":     renderReserveChart(series); break;
+        case "reserve":     renderReserveChart(series, dashboard); break;
         case "sma":         renderSmaChart(series); break;
         case "performance": renderPerformanceChart(series); break;
-        case "yield":       renderYieldChart(series); break;
+        case "yield":       renderYieldChart(series, dashboard); break;
         case "satstoshare": renderSatsChart(series); break;
         case "nav":         renderNavChart(series, dashboard); break;
         case "cost":        renderCostChart(series); break;

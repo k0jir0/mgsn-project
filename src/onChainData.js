@@ -116,14 +116,25 @@ const ArchiveIDL = ({ IDL }) =>
     ),
   });
 
-const ledgerActor = Actor.createActor(LedgerIDL, {
-  agent,
-  canisterId: MGSN_LEDGER_CANISTER,
-});
+const ledgerActors = new Map();
+
+function getLedgerActor(canisterId) {
+  if (!ledgerActors.has(canisterId)) {
+    ledgerActors.set(
+      canisterId,
+      Actor.createActor(LedgerIDL, { agent, canisterId })
+    );
+  }
+
+  return ledgerActors.get(canisterId);
+}
+
+const ledgerActor = getLedgerActor(MGSN_LEDGER_CANISTER);
 
 const archiveActors = new Map();
 
 let ledgerSnapshotCache = null;
+const tokenLedgerSnapshotCache = new Map();
 let burnProgramCache = null;
 let buybackProgramCache = null;
 let stakingProgramCache = null;
@@ -312,6 +323,39 @@ export async function fetchMgsnLedgerSnapshot(force = false) {
     };
 
     ledgerSnapshotCache = { ts: Date.now(), value };
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchTokenLedgerSnapshot(canisterId, force = false) {
+  if (!canisterId) return null;
+  if (canisterId === MGSN_LEDGER_CANISTER) {
+    return fetchMgsnLedgerSnapshot(force);
+  }
+
+  const cached = tokenLedgerSnapshotCache.get(canisterId);
+  if (!force && isFresh(cached, SNAPSHOT_CACHE_MS)) {
+    return cached.value;
+  }
+
+  try {
+    const actor = getLedgerActor(canisterId);
+    const [decimalsNat, totalSupplyNat] = await Promise.all([
+      withTimeout(actor.icrc1_decimals(), 10_000),
+      withTimeout(actor.icrc1_total_supply(), 10_000),
+    ]);
+
+    const decimals = Number(decimalsNat);
+    const value = {
+      canisterId,
+      decimals,
+      currentSupply: tokenAmountToNumber(totalSupplyNat, decimals),
+      currentSupplyRaw: totalSupplyNat.toString(),
+    };
+
+    tokenLedgerSnapshotCache.set(canisterId, { ts: Date.now(), value });
     return value;
   } catch {
     return null;
