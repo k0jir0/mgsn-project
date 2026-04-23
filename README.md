@@ -2,11 +2,12 @@
 
 Live site: https://yezrb-diaaa-aaaah-qugnq-cai.icp0.io/
 
-MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosystem. It combines live ICPSwap market data, MGSN ledger data, tokenomics-focused calculators, a live-controls drawer for refresh and local defaults, and a revenue-first operating stack across dashboard, strategy, build, subscribe, ops, buyback, staking, and burn pages.
+MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosystem. It combines live ICPSwap market data, MGSN ledger data, tokenomics-focused calculators, a live-controls drawer for refresh and local defaults, and a revenue-first operating stack across dashboard, trench, strategy, build, subscribe, ops, buyback, staking, and burn pages.
 
 ## What Is Live Today
 
 - Dashboard uses live ICPSwap prices and pool stats, plus monthly history with a current live point.
+- Trench is a lore-first Maurice landing page with a live proof console that keeps quotes and public proof feeds wired into the larger BOB plan.
 - Strategy uses live market inputs for signals, DCA modeling, LP yield estimates, and shareable signal summaries.
 - Buyback is live as a calculator and schedule page, and reports an unpublished vault honestly until a public buyback account is published.
 - Staking uses live market assumptions and published program status, but needs a public staking canister read interface before live positions can be shown.
@@ -22,6 +23,7 @@ MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosyste
 | Route | Purpose |
 | --- | --- |
 | `/` | Dashboard: charts, live prices, reserve view, volume/liquidity, portfolio context |
+| `/trench.html` | Maurice landing page: phase-one trench console, route map, live proof panel, BOB/ICP framing |
 | `/strategy.html` | Strategy engine: 6-signal view, Kelly sizing, DCA, LP yield, portfolio tools |
 | `/build.html` | Build spec: SNS DAO, treasury logic, revenue app, analytics layer, and reality check |
 | `/subscribe.html` | Subscription revenue app: invoice creation, payment reconciliation, treasury settlement |
@@ -90,6 +92,8 @@ ICPSwap swap URL:
 ```text
 src/
   main.js         Dashboard
+  trench.js       Maurice landing page and live proof console
+  trench.css      Maurice trench-specific visuals
   strategy.js     Strategy page
   build.js        Build-spec roadmap page
   subscribe.js    Subscription billing page
