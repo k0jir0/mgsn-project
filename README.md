@@ -11,7 +11,11 @@ MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosyste
 - Strategy uses live market inputs for signals, DCA modeling, LP yield estimates, and shareable signal summaries.
 - Buyback is live as a calculator and schedule page, and reports an unpublished vault honestly until a public buyback account is published.
 - Staking uses live market assumptions and published program status, but needs a public staking canister read interface before live positions can be shown.
-- Burn reads live MGSN ledger and archive data to show supply, burn totals, leaderboard, and burn milestones.
+- Burn now combines a live ledger-indexed board with an Internet Identity burn console, personal burner stats, proof panels, and companion burn pages.
+- Burn Proof exposes receipt-first verification, recent burns, and short-window burn flow.
+- Hall of Flame expands the burn leaderboard into all-time and 30-day ranking views.
+- Burn Lab is the hard-math planning surface for supply impact, milestone distance, and projected rank movement.
+- Protocol Burns tracks treasury, buyback, and trench-linked burn wiring honestly, including staged LP burn receipts.
 - Build page turns the lean SNS DAO, treasury, revenue app, and analytics spec into an integrated roadmap tied to current token IDs and public program wiring.
 - Subscribe issues real on-chain invoices from a subscriptions canister, verifies invoice balances, and settles paid subscriptions into treasury.
 - Ops exposes treasury disbursements, treasury balance snapshots, analytics KPIs, and bootstrap controls for wiring the new canisters together.
@@ -30,7 +34,11 @@ MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosyste
 | `/ops.html` | Treasury and analytics operations: bootstrap wiring, balance snapshots, governance hooks, disbursements |
 | `/buyback.html` | Buyback program: schedule, calculator, program status, execution log area |
 | `/staking.html` | Staking program: lock tiers, APY estimator, supply impact, live program status |
-| `/burn.html` | Community burn: ledger-indexed burns, leaderboard, milestones, impact calculator |
+| `/burn.html` | Community burn: native burn console, personal burner card, proof panel, milestones, and leaderboard |
+| `/burn-proof.html` | Burn Proof: receipt-first burn verification, recent receipts, and 14-day burn flow |
+| `/hall-of-flame.html` | Hall of Flame: all-time and 30-day burn rankings |
+| `/burn-lab.html` | Burn Lab: scenario planning for supply compression, milestone distance, and projected rank |
+| `/protocol-burns.html` | Protocol Burns: treasury, buyback, and trench-linked burn source coverage |
 
 ## Data Sources
 
@@ -76,9 +84,10 @@ ICPSwap swap URL:
 
 ### Burn
 
-- Burn page is fully live from ledger/archive data.
+- Burn page is live from ledger/archive data and now includes a direct Internet Identity burn rail for default-account holders.
 - Blackhole address is `aaaaa-aa`.
 - Burn totals and burn leaderboard are derived from real on-chain activity.
+- Burn Proof, Hall of Flame, Burn Lab, and Protocol Burns now extend the burn surface without leaving the burn data spine.
 
 ## Stack
 
@@ -101,6 +110,12 @@ src/
   buyback.js      Buyback page
   staking.js      Staking page
   burn.js         Burn page
+  burn-proof.js   Burn receipt and proof page
+  hall-of-flame.js Burn ranking page
+  burn-lab.js     Burn planning page
+  protocol-burns.js Protocol burn source page
+  burnSuite.js    Shared burn data, routing, and burn-execution helpers
+  burnHub.css     Shared burn ecosystem styling
   auth.js         Internet Identity session helper
   mgsnCanisters.js Manual actor factories for treasury, subscriptions, and analytics
   platformUtils.js Shared bigint, principal, and timestamp formatting helpers

@@ -1,6 +1,7 @@
 import { Actor, HttpAgent } from "@dfinity/agent";
 import { IDL } from "@dfinity/candid";
 import { safeGetCanisterEnv } from "@icp-sdk/core/agent/canister-env";
+import { TOKEN_CANISTERS } from "./demoData.js";
 
 const canisterEnv = safeGetCanisterEnv();
 const IC_API_HOST = "https://icp-api.io";
@@ -19,6 +20,43 @@ function accountType() {
   return IDL.Record({
     owner: IDL.Principal,
     subaccount: IDL.Opt(IDL.Vec(IDL.Nat8)),
+  });
+}
+
+function icrcTransferErrorType() {
+  return IDL.Variant({
+    BadFee: IDL.Record({ expected_fee: IDL.Nat }),
+    BadBurn: IDL.Record({ min_burn_amount: IDL.Nat }),
+    InsufficientFunds: IDL.Record({ balance: IDL.Nat }),
+    TooOld: IDL.Null,
+    CreatedInFuture: IDL.Record({ ledger_time: IDL.Nat64 }),
+    TemporarilyUnavailable: IDL.Null,
+    Duplicate: IDL.Record({ duplicate_of: IDL.Nat }),
+    GenericError: IDL.Record({ error_code: IDL.Nat, message: IDL.Text }),
+  });
+}
+
+function icrcLedgerIdlFactory({ IDL }) {
+  const Account = accountType();
+  const TransferArgs = IDL.Record({
+    from_subaccount: IDL.Opt(IDL.Vec(IDL.Nat8)),
+    to: Account,
+    amount: IDL.Nat,
+    fee: IDL.Opt(IDL.Nat),
+    memo: IDL.Opt(IDL.Vec(IDL.Nat8)),
+    created_at_time: IDL.Opt(IDL.Nat64),
+  });
+
+  return IDL.Service({
+    icrc1_balance_of: IDL.Func([Account], [IDL.Nat], ["query"]),
+    icrc1_decimals: IDL.Func([], [IDL.Nat8], ["query"]),
+    icrc1_fee: IDL.Func([], [IDL.Nat], ["query"]),
+    icrc1_symbol: IDL.Func([], [IDL.Text], ["query"]),
+    icrc1_transfer: IDL.Func(
+      [TransferArgs],
+      [IDL.Variant({ Ok: IDL.Nat, Err: icrcTransferErrorType() })],
+      []
+    ),
   });
 }
 
@@ -409,15 +447,8 @@ async function createManagedActor(name, idlFactory, identity) {
   const agent = new HttpAgent({
     host: getCanisterHost(),
     identity,
+    rootKey: canisterEnv?.IC_ROOT_KEY,
   });
-
-  if (window.location.hostname.includes("localhost")) {
-    try {
-      await agent.fetchRootKey();
-    } catch {
-      // Ignore local root key failures and let the caller surface any follow-up issues.
-    }
-  }
 
   return Actor.createActor(idlFactory, {
     agent,
@@ -435,4 +466,17 @@ export async function createTreasuryActor(identity) {
 
 export async function createSubscriptionsActor(identity) {
   return createManagedActor("subscriptions", subscriptionsIdlFactory, identity);
+}
+
+export async function createMgsnLedgerActor(identity) {
+  const agent = new HttpAgent({
+    host: getCanisterHost(),
+    identity,
+    rootKey: canisterEnv?.IC_ROOT_KEY,
+  });
+
+  return Actor.createActor(icrcLedgerIdlFactory, {
+    agent,
+    canisterId: TOKEN_CANISTERS.MGSN,
+  });
 }

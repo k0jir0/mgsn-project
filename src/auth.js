@@ -2,6 +2,9 @@ import { AuthClient } from "@dfinity/auth-client";
 
 let authClientPromise;
 const listeners = new Set();
+const DEFAULT_MAINNET_IDENTITY_PROVIDER = "https://id.ai";
+const LOCAL_IDENTITY_PROVIDER = "http://id.ai.localhost:8000";
+const EIGHT_HOURS_NS = 8n * 3_600_000_000_000n;
 
 async function getAuthClient() {
   if (!authClientPromise) {
@@ -16,7 +19,18 @@ async function getAuthClient() {
 }
 
 function getIdentityProvider() {
-  return window.localStorage.getItem("MGSN_IDENTITY_PROVIDER") || "https://identity.ic0.app";
+  const overriddenProvider = window.localStorage.getItem("MGSN_IDENTITY_PROVIDER");
+  if (overriddenProvider) {
+    return overriddenProvider;
+  }
+
+  const host = window.location.hostname;
+  const isLocal =
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.endsWith(".localhost");
+
+  return isLocal ? LOCAL_IDENTITY_PROVIDER : DEFAULT_MAINNET_IDENTITY_PROVIDER;
 }
 
 async function broadcastAuthState() {
@@ -46,6 +60,7 @@ export async function login() {
   await new Promise((resolve, reject) => {
     client.login({
       identityProvider: getIdentityProvider(),
+      maxTimeToLive: EIGHT_HOURS_NS,
       onSuccess: resolve,
       onError: reject,
     });
