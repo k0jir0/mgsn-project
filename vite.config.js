@@ -57,6 +57,7 @@ export default defineConfig(({ command }) => ({
         ops:      "./ops.html",
         buyback:  "./buyback.html",
         staking:  "./staking.html",
+        keepBurn: "./keep-burn.html",
         burn:     "./burn.html",
         burnProof:"./burn-proof.html",
         hallOfFlame:"./hall-of-flame.html",

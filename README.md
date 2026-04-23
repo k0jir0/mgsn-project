@@ -11,6 +11,7 @@ MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosyste
 - Strategy uses live market inputs for signals, DCA modeling, LP yield estimates, and shareable signal summaries.
 - Buyback is live as a calculator and schedule page, and reports an unpublished vault honestly until a public buyback account is published.
 - Staking uses live market assumptions and published program status, but needs a public staking canister read interface before live positions can be shown.
+- Keep/Burn turns an ICP amount into a guided MGSN support plan with keep and burn splits, simple plain-English outcomes, and direct handoff into ICPSwap plus the burn rail.
 - Burn now combines a live ledger-indexed board with an Internet Identity burn console, personal burner stats, proof panels, and companion burn pages.
 - Burn Proof exposes receipt-first verification, recent burns, and short-window burn flow.
 - Hall of Flame expands the burn leaderboard into all-time and 30-day ranking views.
@@ -34,6 +35,7 @@ MGSN Strategy Tracker is a multi-page ICP frontend for the MGSN and BOB ecosyste
 | `/ops.html` | Treasury and analytics operations: bootstrap wiring, balance snapshots, governance hooks, disbursements |
 | `/buyback.html` | Buyback program: schedule, calculator, program status, execution log area |
 | `/staking.html` | Staking program: lock tiers, APY estimator, supply impact, live program status |
+| `/keep-burn.html` | Guided keep/burn plan: choose ICP, pick a split, buy MGSN, and preload a burn amount |
 | `/burn.html` | Community burn: native burn console, personal burner card, proof panel, milestones, and leaderboard |
 | `/burn-proof.html` | Burn Proof: receipt-first burn verification, recent receipts, and 14-day burn flow |
 | `/hall-of-flame.html` | Hall of Flame: all-time and 30-day burn rankings |
@@ -109,6 +111,7 @@ src/
   ops.js          Treasury and analytics operations page
   buyback.js      Buyback page
   staking.js      Staking page
+  keep-burn.js    Guided keep/burn support planner
   burn.js         Burn page
   burn-proof.js   Burn receipt and proof page
   hall-of-flame.js Burn ranking page

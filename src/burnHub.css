@@ -492,6 +492,222 @@
   font-family: "IBM Plex Mono", monospace;
 }
 
+.kb-preset-group {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kb-preset-legend {
+  display: block;
+  margin-bottom: 8px;
+  color: #94a3b8;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.kb-preset-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.kb-preset-option {
+  position: relative;
+  display: block;
+}
+
+.kb-preset-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.kb-preset-card {
+  display: block;
+  padding: 13px 14px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+
+.kb-preset-input:checked + .kb-preset-card {
+  border-color: rgba(251, 146, 60, 0.52);
+  box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.18);
+  transform: translateY(-1px);
+}
+
+.kb-preset-input:focus-visible + .kb-preset-card {
+  outline: 2px solid rgba(125, 211, 252, 0.75);
+  outline-offset: 2px;
+}
+
+.kb-preset-title {
+  display: block;
+  color: #fff7ed;
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.kb-preset-copy {
+  display: block;
+  margin-top: 6px;
+  color: #9fb0c8;
+  font-size: 0.79rem;
+  line-height: 1.55;
+}
+
+.kb-preset-meta {
+  display: block;
+  margin-top: 8px;
+  color: #fecaca;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.kb-split-rail {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 10px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.kb-split-keep {
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0.92), rgba(37, 99, 235, 0.92));
+}
+
+.kb-split-burn {
+  background: linear-gradient(90deg, rgba(249, 115, 22, 0.92), rgba(220, 38, 38, 0.92));
+}
+
+.kb-feedback {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.72);
+  color: #dbe2f1;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.kb-feedback.live {
+  color: #bbf7d0;
+  border-color: rgba(134, 239, 172, 0.2);
+  background: rgba(20, 83, 45, 0.2);
+}
+
+.kb-feedback.warn {
+  color: #fde68a;
+  border-color: rgba(250, 204, 21, 0.2);
+  background: rgba(113, 63, 18, 0.2);
+}
+
+.kb-step-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.kb-step-card {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.kb-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.16);
+  color: #fdba74;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.kb-step-title {
+  margin: 12px 0 0;
+  color: #fff7ed;
+  font-size: 0.98rem;
+}
+
+.kb-step-copy {
+  margin: 8px 0 0;
+  color: #9fb0c8;
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
+.kb-summary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.kb-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.kb-summary-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.kb-summary-label {
+  color: #94a3b8;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.69rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.kb-summary-value {
+  color: #fff7ed;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.kb-inline-note {
+  margin: 0;
+  color: #9fb0c8;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.kb-support-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 14px;
+}
+
+@media (max-width: 1080px) {
+  .kb-step-list,
+  .kb-support-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1080px) {
   .burn-hero,
   .burn-proof-grid,
