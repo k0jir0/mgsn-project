@@ -88,6 +88,70 @@ type Settlement = record {
   analyticsRecorded : bool;
 };
 
+type TrenchRouteMode = variant {
+  phase_one_liquidity;
+  bob_reserve_planned;
+};
+
+type TrenchStage = variant {
+  intent_created;
+  funds_detected;
+  icp_swept;
+  mgsn_execution_ready;
+  liquidity_routed;
+  lp_locked;
+  lp_burned;
+  proof_published;
+};
+
+type TrenchCheckpoint = record {
+  stage : TrenchStage;
+  recordedAt : int;
+  note : text;
+  recordedBy : principal;
+  txIndex : opt nat;
+};
+
+type TrenchIntent = record {
+  id : nat;
+  subscriber : principal;
+  routeMode : TrenchRouteMode;
+  requestedAmountE8s : nat;
+  routedAmountE8s : nat;
+  quotedAmountE8s : nat;
+  transferFeeE8s : nat;
+  subaccount : blob;
+  account : Account;
+  createdAt : int;
+  expiresAt : int;
+  paidAt : opt int;
+  sweptAt : opt int;
+  sweptTxIndex : opt nat;
+  balanceE8s : nat;
+  status : InvoiceStatus;
+  currentStage : TrenchStage;
+  memo : text;
+  checkpoints : vec TrenchCheckpoint;
+};
+
+type TrenchSettlement = record {
+  intent : TrenchIntent;
+  treasuryTransferTxIndex : nat;
+  treasuryRecorded : bool;
+};
+
+type TrenchOverview = record {
+  owner : opt principal;
+  operators : vec principal;
+  config : IntegrationConfig;
+  intents : vec TrenchIntent;
+  totalRequestedE8s : nat;
+  totalObservedE8s : nat;
+  totalSettledE8s : nat;
+  settledCount : nat;
+  pendingCount : nat;
+};
+
 type PortalState = record {
   owner : opt principal;
   operators : vec principal;
@@ -104,20 +168,27 @@ type ResultOfPlan = variant { ok : Plan; err : text };
 type ResultOfInvoice = variant { ok : Invoice; err : text };
 type ResultOfSettlement = variant { ok : Settlement; err : text };
 type ResultOfSubscription = variant { ok : Subscription; err : text };
+type ResultOfTrenchIntent = variant { ok : TrenchIntent; err : text };
+type ResultOfTrenchSettlement = variant { ok : TrenchSettlement; err : text };
 
 service : {
   addOperator : (principal) -> (ResultOfPrincipals);
+  advanceTrenchIntent : (nat, TrenchStage, text, opt nat) -> (ResultOfTrenchIntent);
   cancelMySubscription : (nat) -> (ResultOfSubscription);
   claimOwner : () -> (ResultOfPrincipal);
   configure : (IntegrationConfig) -> (ResultOfConfig);
   createInvoice : (nat, text) -> (ResultOfInvoice);
   createPlan : (PlanInput) -> (ResultOfPlan);
+  createTrenchIntent : (nat, TrenchRouteMode, text) -> (ResultOfTrenchIntent);
   getConfig : query () -> (IntegrationConfig);
   getPortalState : query (opt principal) -> (PortalState);
+  getTrenchState : query (opt principal) -> (TrenchOverview);
   listPlans : query () -> (vec Plan);
   refreshInvoice : (nat) -> (ResultOfInvoice);
+  refreshTrenchIntent : (nat) -> (ResultOfTrenchIntent);
   removeOperator : (principal) -> (ResultOfPrincipals);
   settleInvoice : (nat) -> (ResultOfSettlement);
+  settleTrenchIntent : (nat) -> (ResultOfTrenchSettlement);
   transferOwnership : (principal) -> (ResultOfPrincipal);
   updatePlan : (nat, PlanInput) -> (ResultOfPlan);
 };

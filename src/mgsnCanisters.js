@@ -306,6 +306,64 @@ function subscriptionsIdlFactory({ IDL }) {
     treasuryRecorded: IDL.Bool,
     analyticsRecorded: IDL.Bool,
   });
+  const TrenchRouteMode = IDL.Variant({
+    phase_one_liquidity: IDL.Null,
+    bob_reserve_planned: IDL.Null,
+  });
+  const TrenchStage = IDL.Variant({
+    intent_created: IDL.Null,
+    funds_detected: IDL.Null,
+    icp_swept: IDL.Null,
+    mgsn_execution_ready: IDL.Null,
+    liquidity_routed: IDL.Null,
+    lp_locked: IDL.Null,
+    lp_burned: IDL.Null,
+    proof_published: IDL.Null,
+  });
+  const TrenchCheckpoint = IDL.Record({
+    stage: TrenchStage,
+    recordedAt: IDL.Int,
+    note: IDL.Text,
+    recordedBy: IDL.Principal,
+    txIndex: IDL.Opt(IDL.Nat),
+  });
+  const TrenchIntent = IDL.Record({
+    id: IDL.Nat,
+    subscriber: IDL.Principal,
+    routeMode: TrenchRouteMode,
+    requestedAmountE8s: IDL.Nat,
+    routedAmountE8s: IDL.Nat,
+    quotedAmountE8s: IDL.Nat,
+    transferFeeE8s: IDL.Nat,
+    subaccount: IDL.Vec(IDL.Nat8),
+    account: Account,
+    createdAt: IDL.Int,
+    expiresAt: IDL.Int,
+    paidAt: IDL.Opt(IDL.Int),
+    sweptAt: IDL.Opt(IDL.Int),
+    sweptTxIndex: IDL.Opt(IDL.Nat),
+    balanceE8s: IDL.Nat,
+    status: InvoiceStatus,
+    currentStage: TrenchStage,
+    memo: IDL.Text,
+    checkpoints: IDL.Vec(TrenchCheckpoint),
+  });
+  const TrenchSettlement = IDL.Record({
+    intent: TrenchIntent,
+    treasuryTransferTxIndex: IDL.Nat,
+    treasuryRecorded: IDL.Bool,
+  });
+  const TrenchOverview = IDL.Record({
+    owner: IDL.Opt(IDL.Principal),
+    operators: IDL.Vec(IDL.Principal),
+    config: IntegrationConfig,
+    intents: IDL.Vec(TrenchIntent),
+    totalRequestedE8s: IDL.Nat,
+    totalObservedE8s: IDL.Nat,
+    totalSettledE8s: IDL.Nat,
+    settledCount: IDL.Nat,
+    pendingCount: IDL.Nat,
+  });
   const PortalState = IDL.Record({
     owner: IDL.Opt(IDL.Principal),
     operators: IDL.Vec(IDL.Principal),
@@ -317,17 +375,22 @@ function subscriptionsIdlFactory({ IDL }) {
 
   return IDL.Service({
     addOperator: IDL.Func([IDL.Principal], [resultVariant(IDL.Vec(IDL.Principal))], []),
+    advanceTrenchIntent: IDL.Func([IDL.Nat, TrenchStage, IDL.Text, IDL.Opt(IDL.Nat)], [resultVariant(TrenchIntent)], []),
     cancelMySubscription: IDL.Func([IDL.Nat], [resultVariant(Subscription)], []),
     claimOwner: IDL.Func([], [resultVariant(IDL.Principal)], []),
     configure: IDL.Func([IntegrationConfig], [resultVariant(IntegrationConfig)], []),
     createInvoice: IDL.Func([IDL.Nat, IDL.Text], [resultVariant(Invoice)], []),
     createPlan: IDL.Func([PlanInput], [resultVariant(Plan)], []),
+    createTrenchIntent: IDL.Func([IDL.Nat, TrenchRouteMode, IDL.Text], [resultVariant(TrenchIntent)], []),
     getConfig: IDL.Func([], [IntegrationConfig], ["query"]),
     getPortalState: IDL.Func([IDL.Opt(IDL.Principal)], [PortalState], ["query"]),
+    getTrenchState: IDL.Func([IDL.Opt(IDL.Principal)], [TrenchOverview], ["query"]),
     listPlans: IDL.Func([], [IDL.Vec(Plan)], ["query"]),
     refreshInvoice: IDL.Func([IDL.Nat], [resultVariant(Invoice)], []),
+    refreshTrenchIntent: IDL.Func([IDL.Nat], [resultVariant(TrenchIntent)], []),
     removeOperator: IDL.Func([IDL.Principal], [resultVariant(IDL.Vec(IDL.Principal))], []),
     settleInvoice: IDL.Func([IDL.Nat], [resultVariant(Settlement)], []),
+    settleTrenchIntent: IDL.Func([IDL.Nat], [resultVariant(TrenchSettlement)], []),
     transferOwnership: IDL.Func([IDL.Principal], [resultVariant(IDL.Principal)], []),
     updatePlan: IDL.Func([IDL.Nat, PlanInput], [resultVariant(Plan)], []),
   });
