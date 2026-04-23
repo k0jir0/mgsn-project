@@ -50,6 +50,7 @@ export default defineConfig(({ command }) => ({
     rollupOptions: {
       input: {
         main:     "./index.html",
+        trench:   "./trench.html",
         strategy: "./strategy.html",
         build:    "./build.html",
         subscribe:"./subscribe.html",
