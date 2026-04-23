@@ -256,6 +256,11 @@ const SCENARIO_HEADER_CONTENT = Object.freeze({
     description: "Refresh ledger-indexed burn history and adjust the default amount used in the burn impact calculator.",
     note: "The burn leaderboard and totals stay ledger-indexed. Only the calculator default is stored locally here.",
   },
+  keepBurn: {
+    heading: "Keep/Burn Live Controls",
+    description: "Refresh the keep/burn planner and keep the burn-page default synced to your current support plan.",
+    note: "This page uses live ICP and MGSN prices plus ledger-indexed burn totals. Only your local planner defaults are stored in this browser.",
+  },
 });
 
 export function buildScenarioHeaderHTML(pageKey, statusHtml = "", overrides = {}) {
@@ -435,6 +440,31 @@ export function buildBurnSourceChips(metrics, scenario, hydration) {
   return buildDataStatusHTML({
     hydration,
     updatedAt: BigInt(Date.now()) * 1_000_000n,
+    chips,
+  });
+}
+
+export function buildKeepBurnSourceChips(state, scenario, hydration) {
+  void scenario;
+  const chips = [];
+
+  if (state?.icpUsd != null && state?.prices?.mgsnUsd != null) {
+    chips.push(sourceChip("live", "Live ICP and MGSN prices"));
+  } else {
+    chips.push(sourceChip("fallback", "Price feed unavailable"));
+  }
+
+  if (state?.burnState?.status === "live") {
+    chips.push(sourceChip("live", "Ledger burn state"));
+  } else {
+    chips.push(sourceChip("fallback", "Burn metrics unavailable"));
+  }
+
+  chips.push(sourceChip("projected", "Guided keep/burn plan"));
+
+  return buildDataStatusHTML({
+    hydration,
+    updatedAt: state?.updatedAt ?? BigInt(Date.now()) * 1_000_000n,
     chips,
   });
 }

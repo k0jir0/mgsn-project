@@ -7,6 +7,7 @@ const PLATFORM_PAGES = Object.freeze([
   { key: "ops", label: "Ops", href: "/ops.html" },
   { key: "buyback", label: "Buyback", href: "/buyback.html" },
   { key: "staking", label: "Staking", href: "/staking.html" },
+  { key: "keepBurn", label: "Keep/Burn", href: "/keep-burn.html" },
   { key: "burn", label: "Burn", href: "/burn.html" },
 ]);
 

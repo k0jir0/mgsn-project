@@ -459,6 +459,290 @@ body {
   font-weight: 400;
 }
 
+.trench-rail-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(255, 138, 61, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 138, 61, 0.05), transparent 42%),
+    rgba(255, 255, 255, 0.02);
+}
+
+.trench-rail-head,
+.trench-intent-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.trench-rail-kicker {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--trench-orange);
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.46rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.trench-rail-head h3,
+.trench-intent-topline h3 {
+  margin: 0;
+  color: var(--trench-ink);
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.trench-rail-copy,
+.trench-intent-copy,
+.trench-rail-empty p,
+.trench-timeline-row p,
+.trench-rail-inline-copy,
+.trench-mode-btn small {
+  margin: 0;
+  color: var(--trench-muted);
+  font-family: "VT323", monospace;
+  font-size: 1.28rem;
+  line-height: 1;
+}
+
+.trench-rail-form,
+.trench-proof-publish {
+  display: grid;
+  gap: 12px;
+}
+
+.trench-rail-label,
+.trench-intent-label {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--trench-dim);
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.44rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.trench-rail-input,
+.trench-rail-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid rgba(105, 255, 235, 0.18);
+  background: rgba(0, 0, 0, 0.26);
+  color: var(--trench-ink);
+  font-family: "VT323", monospace;
+  font-size: 1.55rem;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.trench-rail-input:focus,
+.trench-rail-textarea:focus {
+  border-color: var(--trench-line-strong);
+  box-shadow: 0 0 0 1px rgba(105, 255, 235, 0.14);
+}
+
+.trench-rail-textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+.trench-mode-row,
+.trench-stage-controls,
+.trench-intent-actions,
+.trench-intent-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.trench-mode-btn,
+.trench-mini-btn,
+.trench-intent-chip {
+  border: 1px solid rgba(105, 255, 235, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--trench-ink);
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.46rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.trench-mode-btn:hover,
+.trench-mini-btn:hover,
+.trench-intent-chip:hover {
+  transform: translateY(-1px);
+  border-color: var(--trench-line-strong);
+}
+
+.trench-mode-btn {
+  flex: 1 1 220px;
+  display: grid;
+  gap: 10px;
+  text-align: left;
+  padding: 12px;
+}
+
+.trench-mode-btn span {
+  color: var(--trench-ink);
+}
+
+.trench-mode-btn--active,
+.trench-intent-chip--active {
+  border-color: rgba(255, 138, 61, 0.36);
+  background: rgba(255, 138, 61, 0.08);
+}
+
+.trench-mini-btn,
+.trench-intent-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.trench-mini-btn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.trench-mini-btn--primary {
+  background: linear-gradient(135deg, rgba(255, 138, 61, 0.92), rgba(194, 65, 12, 0.94));
+  border-color: transparent;
+  color: #fff;
+}
+
+.trench-mini-btn--accent {
+  background: rgba(105, 255, 235, 0.08);
+  color: var(--trench-bio);
+}
+
+.trench-mini-btn--ghost {
+  color: var(--trench-muted);
+}
+
+.trench-rail-alert,
+.trench-rail-empty,
+.trench-intent-card {
+  padding: 14px;
+  border: 1px solid rgba(105, 255, 235, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.trench-rail-alert {
+  color: var(--trench-ink);
+  font-family: "VT323", monospace;
+  font-size: 1.42rem;
+  line-height: 1;
+}
+
+.trench-rail-alert--success {
+  border-color: rgba(105, 255, 235, 0.26);
+  background: rgba(105, 255, 235, 0.08);
+}
+
+.trench-rail-alert--error {
+  border-color: rgba(255, 95, 95, 0.28);
+  background: rgba(255, 95, 95, 0.1);
+}
+
+.trench-rail-empty strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--trench-ink);
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.58rem;
+}
+
+.trench-intent-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trench-intent-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid rgba(105, 255, 235, 0.14);
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.42rem;
+  text-transform: uppercase;
+}
+
+.trench-intent-pill--live {
+  color: var(--trench-bio);
+}
+
+.trench-intent-pill--projected {
+  color: var(--trench-orange);
+}
+
+.trench-intent-pill--fallback {
+  color: var(--trench-red);
+}
+
+.trench-intent-pill--preview,
+.trench-intent-pill--stage {
+  color: var(--trench-muted);
+}
+
+.trench-intent-grid,
+.trench-intent-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.trench-intent-grid strong,
+.trench-intent-meta strong,
+.trench-intent-meta code {
+  color: var(--trench-ink);
+  font-family: "VT323", monospace;
+  font-size: 1.55rem;
+  line-height: 1;
+  word-break: break-word;
+}
+
+.trench-timeline {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.trench-timeline-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding-top: 10px;
+  border-top: 1px solid rgba(105, 255, 235, 0.08);
+}
+
+.trench-timeline-row strong,
+.trench-timeline-empty {
+  color: var(--trench-ink);
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.48rem;
+  line-height: 1.6;
+}
+
+.trench-timeline-row span {
+  color: var(--trench-dim);
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.42rem;
+  white-space: nowrap;
+}
+
 .trench-thesis-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -766,12 +1050,17 @@ body {
   .trench-why-grid,
   .trench-flow-grid,
   .trench-flow-strip,
-  .trench-console-grid {
+  .trench-console-grid,
+  .trench-intent-grid,
+  .trench-intent-meta {
     grid-template-columns: 1fr;
   }
 
   .trench-proof-head,
-  .trench-section-head {
+  .trench-section-head,
+  .trench-rail-head,
+  .trench-intent-topline,
+  .trench-timeline-row {
     flex-direction: column;
     align-items: stretch;
   }
@@ -793,14 +1082,20 @@ body {
   .trench-btn,
   .trench-flow-link,
   .trench-refresh-btn,
-  .trench-footer-link {
+  .trench-footer-link,
+  .trench-mini-btn,
+  .trench-intent-chip {
     width: 100%;
     justify-content: center;
   }
 
   .trench-flow-actions,
   .trench-cta-row,
-  .trench-lower-actions {
+  .trench-lower-actions,
+  .trench-mode-row,
+  .trench-stage-controls,
+  .trench-intent-actions,
+  .trench-intent-picker {
     flex-direction: column;
   }
 

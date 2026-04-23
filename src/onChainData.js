@@ -407,9 +407,11 @@ function createBurnEvent(tx, blockIndex, decimals) {
       blockIndex: Number(blockIndex),
       txId: blockIndex.toString(),
       date: txDate(tx.timestamp),
+      timestampNs: tx.timestamp.toString(),
       address: accountOwner(transfer.from),
       mgsnBurned: tokenAmountToNumber(transfer.amount, decimals),
       note: "Transfer to ICP blackhole",
+      method: "transfer_to_blackhole",
     };
   }
 
@@ -419,9 +421,11 @@ function createBurnEvent(tx, blockIndex, decimals) {
       blockIndex: Number(blockIndex),
       txId: blockIndex.toString(),
       date: txDate(tx.timestamp),
+      timestampNs: tx.timestamp.toString(),
       address: accountOwner(burn.from),
       mgsnBurned: tokenAmountToNumber(burn.amount, decimals),
       note: "Native ledger burn",
+      method: "native_burn",
     };
   }
 
